@@ -1,0 +1,78 @@
+@import "tailwindcss";
+
+@theme {
+  /* Paleta Black & Red (idéntica a la app original de Apps Script) */
+  --color-base: #0a0a0a;
+  --color-surface: #111111;
+  --color-surface-2: #0d0d0d;
+  --color-surface-3: #151515;
+  --color-line: #222222;
+  --color-line-soft: #1a1a1a;
+  --color-line-strong: #333333;
+  --color-accent: #ff3b3b;
+  --color-accent-soft: #ff5252;
+  --color-wine: #7b1e1e;
+  --color-wine-hover: #942424;
+  --color-ok: #1e9b3c;
+  --color-ok-hover: #178a32;
+  --color-send: #2b8bc4;
+  --color-wa: #25d366;
+  --color-muted: #888888;
+  --color-muted-2: #666666;
+
+  --font-sans: "Segoe UI", Arial, sans-serif;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  background: var(--color-base);
+  color: #f0f0f0;
+  font-family: var(--font-sans);
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(0.7);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.4s ease-out;
+}
+
+.dot-vivo::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-ok);
+  flex-shrink: 0;
+  animation: pulse-dot 2s ease-in-out infinite;
+}
