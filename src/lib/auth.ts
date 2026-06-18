@@ -10,6 +10,21 @@ export interface Sesion {
   perfil: Perfil;
 }
 
+/**
+ * Cuando un usuario no tiene `nombre` en su metadata, arma uno legible a partir
+ * del correo: toma la parte antes del `@`, separa por `. _ -` y capitaliza.
+ * Ej: "juan.marin@black.com" → "Juan Marin".
+ */
+function nombreDesdeEmail(email: string | undefined): string {
+  const local = email?.split("@")[0];
+  if (!local) return "";
+  return local
+    .split(/[._-]+/)
+    .filter(Boolean)
+    .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+    .join(" ");
+}
+
 export function authConfigurada(): boolean {
   return Boolean(
     process.env.NEXT_PUBLIC_SUPABASE_URL &&
@@ -34,8 +49,12 @@ export async function getSesion(): Promise<Sesion | null> {
 
   const perfilRaw = user.app_metadata?.perfil;
   const perfil: Perfil = esPerfil(perfilRaw) ? perfilRaw : "vendedor";
-  const nombre =
-    (user.user_metadata?.nombre as string | undefined) || user.email || "";
+  // Supabase guarda el "Display name" del panel en user_metadata.display_name.
+  const meta = user.user_metadata ?? {};
+  const nombreMeta =
+    (meta.nombre as string | undefined)?.trim() ||
+    (meta.display_name as string | undefined)?.trim();
+  const nombre = nombreMeta || nombreDesdeEmail(user.email) || "";
 
   return { email: user.email ?? "", nombre, perfil };
 }

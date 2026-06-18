@@ -47,8 +47,11 @@ export async function POST(request: NextRequest) {
 
   try {
     const order = (await request.json()) as Order;
-    const res = await saveOrder(order);
-    return NextResponse.json(res);
+    const res = await saveOrder(order, {
+      nombre: sesion.nombre,
+      email: sesion.email,
+    });
+    return NextResponse.json({ ...res, vendedor: sesion.nombre });
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Error guardando pedido" },

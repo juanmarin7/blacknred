@@ -67,7 +67,6 @@ export interface OrderItem {
 
 export interface Order {
   idClienteLocal: string;
-  idVendedor: string;
   items: OrderItem[];
 }
 

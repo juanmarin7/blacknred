@@ -27,6 +27,9 @@ import type {
  *  A Codigo | B Fecha | C Nombre Cliente | D Local | E Direccion | F id_cliente
  *  G Vendedor | H id_vendedor | I Producto | J id_producto | K Cantidad
  *  L Tipo empaque | M Color | N descripción | O Total | P Estado | Q Precio
+ *
+ * El Vendedor (G) e id_vendedor (H) son el usuario autenticado que registra el
+ * pedido: nombre = display_name de Supabase, id_vendedor = su correo.
  */
 
 const SHEET_VENTAS = "Ventas";
@@ -217,9 +220,10 @@ function fechaPedidoActual(): string {
 
 export async function saveOrder(
   order: Order,
+  vendedor: { nombre: string; email: string },
 ): Promise<{ ok: true; codigo: number }> {
-  if (!order || !order.idClienteLocal || !order.idVendedor) {
-    throw new Error("Cliente o vendedor no definidos.");
+  if (!order || !order.idClienteLocal) {
+    throw new Error("Cliente no definido.");
   }
   if (!order.items || !order.items.length) {
     throw new Error("Pedido vacío");
@@ -233,9 +237,7 @@ export async function saveOrder(
     const data = await getInitialData();
 
     const cliente = data.clientes.find((c) => c.id === order.idClienteLocal);
-    const vendedor = data.vendedores.find((v) => v.id === order.idVendedor);
     if (!cliente) throw new Error("Cliente no encontrado");
-    if (!vendedor) throw new Error("Vendedor no encontrado");
 
     // Código consecutivo: último código de la hoja + 1
     const codigos = await leerRango(`${SHEET_VENTAS}!A2:A`, { fresco: true });
@@ -263,7 +265,7 @@ export async function saveOrder(
         cliente.direccion,
         cliente.id,
         vendedor.nombre,
-        vendedor.id,
+        vendedor.email,
         producto.nombre,
         producto.id,
         item.cantidad,

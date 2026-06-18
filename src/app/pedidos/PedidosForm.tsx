@@ -38,7 +38,6 @@ export default function PedidosForm() {
   const [errorCarga, setErrorCarga] = useState<string | null>(null);
 
   const [idCliente, setIdCliente] = useState("");
-  const [idVendedor, setIdVendedor] = useState("");
   const [idProducto, setIdProducto] = useState("");
   const [empaqueSel, setEmpaqueSel] = useState("");
   const [cantidad, setCantidad] = useState("");
@@ -150,9 +149,9 @@ export default function PedidosForm() {
       mostrarAlerta("Seleccione un producto valido", "error");
       return;
     }
-    if (!idCliente || !idVendedor) {
+    if (!idCliente) {
       mostrarAlerta(
-        "Debe seleccionar cliente y vendedor antes de agregar productos.",
+        "Debe seleccionar cliente antes de agregar productos.",
         "error",
       );
       return;
@@ -246,7 +245,6 @@ export default function PedidosForm() {
 
     const order = {
       idClienteLocal: idCliente,
-      idVendedor,
       items: items.map((i) => ({
         idProducto: i.producto.id,
         cantidad: i.cantidad,
@@ -275,13 +273,12 @@ export default function PedidosForm() {
         minute: "2-digit",
       });
       const cliente = data!.clientes.find((c) => c.id === idCliente);
-      const vendedor = data!.vendedores.find((v) => v.id === idVendedor);
 
       setResumen({
         codigo: body.codigo,
         fecha,
         clienteTexto: cliente ? `${cliente.nombre} - ${cliente.local}` : "",
-        vendedorTexto: vendedor?.nombre ?? "",
+        vendedorTexto: (body.vendedor as string | undefined) ?? "",
         items,
       });
       setItems([]);
@@ -385,7 +382,7 @@ export default function PedidosForm() {
       <div className="mx-auto w-full max-w-[720px] px-4 py-4 md:max-w-[800px]">
         {/* Datos del pedido */}
         <section className="mb-4 rounded-[10px] border border-line bg-surface p-4 md:p-5">
-          <h3 className="text-base font-bold md:text-lg">Datos del pedido</h3>
+          <h3 className="text-base font-bold text-white md:text-lg">Datos del pedido</h3>
 
           <label className={labelCls}>Cliente / Local</label>
           <Combobox
@@ -397,25 +394,11 @@ export default function PedidosForm() {
             onChange={setIdCliente}
             placeholder="Buscar cliente o local..."
           />
-
-          <label className={labelCls}>Vendedor</label>
-          <select
-            value={idVendedor}
-            onChange={(e) => setIdVendedor(e.target.value)}
-            className={inputCls}
-          >
-            <option value="">Seleccione una opcion...</option>
-            {data.vendedores.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.nombre}
-              </option>
-            ))}
-          </select>
         </section>
 
         {/* Agregar producto */}
         <section className="mb-4 rounded-[10px] border border-line bg-surface p-4 md:p-5">
-          <h3 className="text-base font-bold md:text-lg">Agregar producto</h3>
+          <h3 className="text-base font-bold text-white md:text-lg">Agregar producto</h3>
 
           <label className={labelCls}>Producto</label>
           <select
@@ -534,7 +517,7 @@ export default function PedidosForm() {
 
         {/* Lista de items */}
         <section className="mb-4 rounded-[10px] border border-line bg-surface p-4 md:p-5">
-          <h3 className="text-base font-bold md:text-lg">
+          <h3 className="text-base font-bold text-white md:text-lg">
             Productos del pedido
           </h3>
           <ul className="mt-2">
