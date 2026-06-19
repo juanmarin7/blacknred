@@ -311,6 +311,7 @@ function hoyBogota(): Date {
 function resumenMock(periodo: PeriodoResumen): ResumenVentas {
   return {
     periodo,
+    rango: { desde: "01/06/2026", hasta: "18/06/2026" },
     vendedor: null,
     vendedoresDisponibles: ["Juan Esteban", "Carolina"],
     montoTotal: 7_840_000,
@@ -336,15 +337,16 @@ function resumenMock(periodo: PeriodoResumen): ResumenVentas {
       { estado: "Facturado", pedidos: 5 },
     ],
     topProductos: [
-      { nombre: "Camiseta básica", monto: 3_100_000, pedidos: 9 },
-      { nombre: "Boxer clásico", monto: 2_600_000, pedidos: 7 },
-      { nombre: "Medias deportivas", monto: 2_140_000, pedidos: 6 },
+      { nombre: "Camiseta básica", monto: 3_100_000, pedidos: 9, unidades: 68 },
+      { nombre: "Boxer clásico", monto: 2_600_000, pedidos: 7, unidades: 50 },
+      { nombre: "Medias deportivas", monto: 2_140_000, pedidos: 6, unidades: 119 },
     ],
     topClientes: [
       { nombre: "Almacén El Punto · Local 12", monto: 3_300_000, pedidos: 8 },
       { nombre: "Variedades Sofi · Local 8", monto: 2_540_000, pedidos: 6 },
       { nombre: "Distribuciones JR · Bodega 3", monto: 2_000_000, pedidos: 4 },
     ],
+    sinDespachar: { pedidos: 4, diasMasViejo: 6 },
     comparativo: {
       montoAnterior: 6_900_000,
       numPedidosAnterior: 16,
@@ -406,11 +408,14 @@ export async function getResumenVentas(
 
   const vendMap = new Map<string, Acumulado>();
   const prodMap = new Map<string, Acumulado>();
+  const prodUnidades = new Map<string, number>();
   const cliMap = new Map<string, Acumulado>();
   const diaMap = new Map<string, { label: string } & Acumulado>();
   const estadoMap = new Map<string, Set<string>>();
   const vendedoresSet = new Set<string>();
   const codsGlobal = new Set<string>();
+  const sinDespacharCods = new Set<string>();
+  let sinDespacharMasViejo: Date | null = null;
   let montoTotal = 0;
   let montoFacturado = 0;
   let montoPorCobrar = 0;
@@ -452,12 +457,21 @@ export async function getResumenVentas(
 
     montoTotal += monto;
     codsGlobal.add(codigo);
-    if (estadoL.includes("facturad")) montoFacturado += monto;
-    else if (estadoL.includes("enviad")) montoPorCobrar += monto;
-    else montoEnProceso += monto;
+    if (estadoL.includes("facturad")) {
+      montoFacturado += monto;
+    } else if (estadoL.includes("enviad")) {
+      montoPorCobrar += monto;
+    } else {
+      montoEnProceso += monto;
+      sinDespacharCods.add(codigo);
+      if (!sinDespacharMasViejo || fecha < sinDespacharMasViejo) {
+        sinDespacharMasViejo = fecha;
+      }
+    }
 
     acumular(vendMap, vendedor, monto, codigo);
     acumular(prodMap, producto, monto, codigo);
+    prodUnidades.set(producto, (prodUnidades.get(producto) ?? 0) + toNumber(row[14]));
     acumular(cliMap, local ? `${cliente} · ${local}` : cliente, monto, codigo);
 
     const claveDia = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}-${String(fecha.getDate()).padStart(2, "0")}`;
@@ -484,8 +498,17 @@ export async function getResumenVentas(
     return limite ? arr.slice(0, limite) : arr;
   };
 
+  const fmt = (d: Date) =>
+    `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+
+  const diaMs = 1000 * 60 * 60 * 24;
+  const diasMasViejo = sinDespacharMasViejo
+    ? Math.floor((hoy.getTime() - sinDespacharMasViejo.getTime()) / diaMs)
+    : 0;
+
   return {
     periodo,
+    rango: { desde: fmt(curIni), hasta: fmt(curFin) },
     vendedor: filtro,
     vendedoresDisponibles: [...vendedoresSet].sort((a, b) =>
       a.localeCompare(b, "es"),
@@ -503,8 +526,12 @@ export async function getResumenVentas(
     porEstado: [...estadoMap.entries()]
       .map(([estado, cods]) => ({ estado, pedidos: cods.size }))
       .sort((a, b) => b.pedidos - a.pedidos),
-    topProductos: ranking(prodMap, 5),
+    topProductos: ranking(prodMap, 5).map((p) => ({
+      ...p,
+      unidades: prodUnidades.get(p.nombre) ?? 0,
+    })),
     topClientes: ranking(cliMap, 5),
+    sinDespachar: { pedidos: sinDespacharCods.size, diasMasViejo },
     comparativo: {
       montoAnterior: montoPrev,
       numPedidosAnterior,

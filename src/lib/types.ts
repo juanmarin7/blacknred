@@ -78,10 +78,14 @@ export interface RankingItem {
   nombre: string;
   monto: number;
   pedidos: number;
+  /** Unidades vendidas (solo se llena para productos). */
+  unidades?: number;
 }
 
 export interface ResumenVentas {
   periodo: PeriodoResumen;
+  /** Rango de fechas cubierto (dd/MM/yyyy) para mostrar en el encabezado. */
+  rango: { desde: string; hasta: string };
   /** Vendedor al que se filtró el tablero, o null = todos. */
   vendedor: string | null;
   /** Vendedores con ventas en el periodo (para el selector de filtro). */
@@ -98,6 +102,8 @@ export interface ResumenVentas {
   porEstado: { estado: string; pedidos: number }[];
   topProductos: RankingItem[];
   topClientes: RankingItem[];
+  /** Pedidos del periodo aún sin despachar (estado Pedido/Parcial). */
+  sinDespachar: { pedidos: number; diasMasViejo: number };
   /** Comparativo contra el periodo anterior equivalente. */
   comparativo: {
     montoAnterior: number;

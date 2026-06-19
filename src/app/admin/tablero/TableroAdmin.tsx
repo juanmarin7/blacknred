@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Area,
   AreaChart,
   Bar,
   BarChart,
   Cell,
-  Legend,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -70,6 +70,8 @@ const COP_CORTO = (n: number) => {
   return `$${n}`;
 };
 
+const NUM = (n: number) => n.toLocaleString("es-CO");
+
 const TOOLTIP_STYLE = {
   contentStyle: {
     background: "#1a1a1a",
@@ -109,14 +111,26 @@ function Tarjeta({
   );
 }
 
-/** Barras horizontales por monto (vendedores, productos, clientes). */
-function BarrasHorizontales({ data }: { data: RankingItem[] }) {
+/** Barras horizontales por monto o por unidades (vendedores/productos/clientes). */
+function BarrasHorizontales({
+  data,
+  dataKey = "monto",
+  ejeFmt = COP_CORTO,
+  tipFmt = COP,
+  tipLabel = "Monto",
+}: {
+  data: RankingItem[];
+  dataKey?: "monto" | "unidades";
+  ejeFmt?: (n: number) => string;
+  tipFmt?: (n: number) => string;
+  tipLabel?: string;
+}) {
   return (
     <ResponsiveContainer width="100%" height={Math.max(160, data.length * 44)}>
       <BarChart layout="vertical" data={data} margin={{ left: 8 }}>
         <XAxis
           type="number"
-          tickFormatter={COP_CORTO}
+          tickFormatter={ejeFmt}
           tick={{ fill: "#9a9a9a", fontSize: 12 }}
           tickLine={false}
           axisLine={{ stroke: "#2a2a2a" }}
@@ -130,10 +144,10 @@ function BarrasHorizontales({ data }: { data: RankingItem[] }) {
           width={130}
         />
         <Tooltip
-          formatter={(value) => [COP(Number(value)), "Monto"]}
+          formatter={(value) => [tipFmt(Number(value)), tipLabel]}
           {...TOOLTIP_STYLE}
         />
-        <Bar dataKey="monto" radius={[0, 4, 4, 0]}>
+        <Bar dataKey={dataKey} radius={[0, 4, 4, 0]}>
           {data.map((_, i) => (
             <Cell key={i} fill={colorPorIndice(i)} />
           ))}
@@ -143,18 +157,79 @@ function BarrasHorizontales({ data }: { data: RankingItem[] }) {
   );
 }
 
+/** Donut + leyenda propia debajo (sin etiquetas externas que se desborden). */
+function DonutLeyenda({
+  segmentos,
+  formato,
+  innerRadius = 52,
+  outerRadius = 80,
+  height = 200,
+}: {
+  segmentos: { name: string; value: number; color: string }[];
+  formato: (n: number) => string;
+  innerRadius?: number;
+  outerRadius?: number;
+  height?: number;
+}) {
+  return (
+    <>
+      <ResponsiveContainer width="100%" height={height}>
+        <PieChart>
+          <Pie
+            data={segmentos}
+            dataKey="value"
+            nameKey="name"
+            cx="50%"
+            cy="50%"
+            innerRadius={innerRadius}
+            outerRadius={outerRadius}
+            paddingAngle={2}
+          >
+            {segmentos.map((s) => (
+              <Cell key={s.name} fill={s.color} />
+            ))}
+          </Pie>
+          <Tooltip
+            formatter={(value) => [formato(Number(value)), ""]}
+            {...TOOLTIP_STYLE}
+          />
+        </PieChart>
+      </ResponsiveContainer>
+      <div className="mt-2 flex flex-col gap-1.5 text-sm">
+        {segmentos.map((s) => (
+          <div key={s.name} className="flex items-center justify-between">
+            <span className="flex items-center gap-2 text-muted-2">
+              <span
+                className="h-2.5 w-2.5 rounded-full"
+                style={{ background: s.color }}
+              />
+              {s.name}
+            </span>
+            <span className="font-semibold text-white">{formato(s.value)}</span>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
 function Panel({
   titulo,
   vacio,
+  accion,
   children,
 }: {
   titulo: string;
   vacio: boolean;
+  accion?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <section className="rounded-[10px] border border-line bg-surface p-4">
-      <h3 className="mb-3 text-base font-bold text-white">{titulo}</h3>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h3 className="text-base font-bold text-white">{titulo}</h3>
+        {accion}
+      </div>
       {vacio ? (
         <div className="py-10 text-center text-sm text-muted-2">
           Sin datos en este periodo.
@@ -166,12 +241,32 @@ function Panel({
   );
 }
 
+function esPeriodo(v: string | null): v is PeriodoResumen {
+  return PERIODOS.some((p) => p.value === v);
+}
+
 export default function TableroAdmin() {
-  const [periodo, setPeriodo] = useState<PeriodoResumen>("mes");
-  const [vendedor, setVendedor] = useState(""); // "" = todos
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const periodoParam = searchParams.get("periodo");
+  const periodo: PeriodoResumen = esPeriodo(periodoParam) ? periodoParam : "mes";
+  const vendedor = searchParams.get("vendedor") ?? "";
+
   const [data, setData] = useState<ResumenVentas | null>(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [modoProd, setModoProd] = useState<"monto" | "unidades">("monto");
+
+  /** Actualiza la URL (el periodo/vendedor viven en el query). */
+  function navegar(cambios: { periodo?: PeriodoResumen; vendedor?: string }) {
+    const per = cambios.periodo ?? periodo;
+    const ven = cambios.vendedor ?? vendedor;
+    const qs = new URLSearchParams();
+    qs.set("periodo", per);
+    if (ven) qs.set("vendedor", ven);
+    setCargando(true);
+    router.replace(`?${qs.toString()}`, { scroll: false });
+  }
 
   useEffect(() => {
     let vivo = true;
@@ -196,10 +291,13 @@ export default function TableroAdmin() {
     };
   }, [periodo, vendedor]);
 
+  const recargando = cargando && data != null;
+
   function exportarCSV() {
     if (!data) return;
     const filas: (string | number)[][] = [
       ["Resumen", PERIODOS.find((p) => p.value === periodo)?.label ?? periodo],
+      ["Rango", `${data.rango.desde} - ${data.rango.hasta}`],
       ["Vendedor", data.vendedor ?? "Todos"],
       [],
       ["Métrica", "Valor"],
@@ -209,12 +307,18 @@ export default function TableroAdmin() {
       ["Facturado", data.montoFacturado],
       ["Por cobrar", data.montoPorCobrar],
       ["En proceso", data.montoEnProceso],
+      ["Sin despachar (pedidos)", data.sinDespachar.pedidos],
       [],
       ["Vendedor", "Monto", "Pedidos"],
       ...data.porVendedor.map((v) => [v.nombre, v.monto, v.pedidos]),
       [],
-      ["Producto", "Monto", "Pedidos"],
-      ...data.topProductos.map((p) => [p.nombre, p.monto, p.pedidos]),
+      ["Producto", "Monto", "Pedidos", "Unidades"],
+      ...data.topProductos.map((p) => [
+        p.nombre,
+        p.monto,
+        p.pedidos,
+        p.unidades ?? 0,
+      ]),
       [],
       ["Cliente", "Monto", "Pedidos"],
       ...data.topClientes.map((c) => [c.nombre, c.monto, c.pedidos]),
@@ -223,9 +327,7 @@ export default function TableroAdmin() {
       ...data.porDia.map((d) => [d.fecha, d.monto, d.pedidos]),
     ];
     const csv = filas
-      .map((f) =>
-        f.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","),
-      )
+      .map((f) => f.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
       .join("\n");
     const url = URL.createObjectURL(
       new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" }),
@@ -237,20 +339,23 @@ export default function TableroAdmin() {
     URL.revokeObjectURL(url);
   }
 
+  const prodData = data
+    ? [...data.topProductos].sort(
+        (a, b) => (b[modoProd] ?? 0) - (a[modoProd] ?? 0),
+      )
+    : [];
+
   return (
     <div className="min-h-screen pb-16">
       <AppHeader titulo="Tablero" />
 
       <div className="mx-auto w-full max-w-[1000px] px-4 py-4">
         {/* Controles */}
-        <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {PERIODOS.map((p) => (
             <button
               key={p.value}
-              onClick={() => {
-                setCargando(true);
-                setPeriodo(p.value);
-              }}
+              onClick={() => navegar({ periodo: p.value })}
               className={`rounded-md border px-4 py-2 text-sm font-semibold transition-colors ${
                 periodo === p.value
                   ? "border-[#4f9cf9] bg-[#4f9cf9]/20 text-white"
@@ -264,10 +369,7 @@ export default function TableroAdmin() {
           <div className="ml-auto flex flex-wrap items-center gap-2">
             <select
               value={vendedor}
-              onChange={(e) => {
-                setCargando(true);
-                setVendedor(e.target.value);
-              }}
+              onChange={(e) => navegar({ vendedor: e.target.value })}
               className="rounded-md border border-line-strong bg-surface-2 px-3 py-2 text-sm text-white focus:border-accent focus:outline-none"
             >
               <option value="">Todos los vendedores</option>
@@ -287,6 +389,17 @@ export default function TableroAdmin() {
           </div>
         </div>
 
+        {/* Rango del periodo */}
+        {data && (
+          <div className="mt-2 mb-4 text-xs text-muted-2">
+            {data.rango.desde} – {data.rango.hasta} · {data.numPedidos} pedidos
+            {data.vendedor && <> · {data.vendedor}</>}
+            {recargando && (
+              <span className="ml-2 text-[#4f9cf9]">actualizando…</span>
+            )}
+          </div>
+        )}
+
         {error && (
           <div className="mb-4 rounded-lg border border-wine bg-wine/30 px-4 py-3 text-sm text-[#ff6b6b]">
             {error}
@@ -294,7 +407,11 @@ export default function TableroAdmin() {
         )}
 
         {data && (
-          <div className="flex flex-col gap-4">
+          <div
+            className={`flex flex-col gap-4 transition-opacity ${
+              recargando ? "opacity-50" : ""
+            }`}
+          >
             {/* Tarjetas */}
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
               <Tarjeta
@@ -313,6 +430,21 @@ export default function TableroAdmin() {
               />
               <Tarjeta titulo="Por cobrar" valor={COP(data.montoPorCobrar)} />
             </div>
+
+            {/* Alerta: pedidos sin despachar */}
+            {data.sinDespachar.pedidos > 0 && (
+              <div className="rounded-lg border border-[#f59e0b]/40 bg-[#f59e0b]/10 px-4 py-3 text-sm text-[#f5c879]">
+                ⚠ {data.sinDespachar.pedidos} pedido
+                {data.sinDespachar.pedidos === 1 ? "" : "s"} sin despachar
+                {data.sinDespachar.diasMasViejo > 0 && (
+                  <>
+                    {" "}
+                    · el más antiguo hace {data.sinDespachar.diasMasViejo} día
+                    {data.sinDespachar.diasMasViejo === 1 ? "" : "s"}
+                  </>
+                )}
+              </div>
+            )}
 
             {/* Tendencia de ventas por día */}
             <Panel titulo="Tendencia de ventas" vacio={data.porDia.length === 0}>
@@ -365,68 +497,51 @@ export default function TableroAdmin() {
 
               {/* Estado de cobro */}
               <Panel titulo="Estado de cobro" vacio={data.montoTotal === 0}>
-                {(() => {
-                  const cobro = [
+                <DonutLeyenda
+                  formato={COP}
+                  segmentos={[
                     { name: "Facturado", value: data.montoFacturado, color: "#22c55e" },
                     { name: "Por cobrar", value: data.montoPorCobrar, color: "#4f9cf9" },
                     { name: "En proceso", value: data.montoEnProceso, color: "#f59e0b" },
-                  ];
-                  return (
-                    <>
-                      <ResponsiveContainer width="100%" height={200}>
-                        <PieChart>
-                          <Pie
-                            data={cobro}
-                            dataKey="value"
-                            nameKey="name"
-                            cx="50%"
-                            cy="50%"
-                            innerRadius={52}
-                            outerRadius={80}
-                            paddingAngle={2}
-                          >
-                            {cobro.map((c) => (
-                              <Cell key={c.name} fill={c.color} />
-                            ))}
-                          </Pie>
-                          <Tooltip
-                            formatter={(value) => [COP(Number(value)), "Monto"]}
-                            {...TOOLTIP_STYLE}
-                          />
-                        </PieChart>
-                      </ResponsiveContainer>
-                      <div className="mt-2 flex flex-col gap-1.5 text-sm">
-                        {cobro.map((c) => (
-                          <div
-                            key={c.name}
-                            className="flex items-center justify-between"
-                          >
-                            <span className="flex items-center gap-2 text-muted-2">
-                              <span
-                                className="h-2.5 w-2.5 rounded-full"
-                                style={{ background: c.color }}
-                              />
-                              {c.name}
-                            </span>
-                            <span className="font-semibold text-white">
-                              {COP(c.value)}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </>
-                  );
-                })()}
+                  ]}
+                />
               </Panel>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
-              {/* Top productos */}
+              {/* Top productos (monto / unidades) */}
               <Panel
                 titulo="Top productos"
                 vacio={data.topProductos.length === 0}
+                accion={
+                  <div className="flex gap-1">
+                    {(["monto", "unidades"] as const).map((m) => (
+                      <button
+                        key={m}
+                        onClick={() => setModoProd(m)}
+                        className={`rounded border px-2 py-1 text-xs font-semibold transition-colors ${
+                          modoProd === m
+                            ? "border-[#4f9cf9] bg-[#4f9cf9]/20 text-white"
+                            : "border-line-strong text-muted hover:text-white"
+                        }`}
+                      >
+                        {m === "monto" ? "Monto" : "Unidades"}
+                      </button>
+                    ))}
+                  </div>
+                }
               >
-                <BarrasHorizontales data={data.topProductos} />
+                {modoProd === "monto" ? (
+                  <BarrasHorizontales data={prodData} />
+                ) : (
+                  <BarrasHorizontales
+                    data={prodData}
+                    dataKey="unidades"
+                    ejeFmt={NUM}
+                    tipFmt={NUM}
+                    tipLabel="Unidades"
+                  />
+                )}
               </Panel>
 
               {/* Top clientes */}
@@ -436,34 +551,58 @@ export default function TableroAdmin() {
             </div>
 
             {/* Pedidos por estado */}
-            <Panel
-              titulo="Pedidos por estado"
-              vacio={data.porEstado.length === 0}
-            >
-              <ResponsiveContainer width="100%" height={260}>
-                <PieChart>
-                  <Pie
-                    data={data.porEstado}
-                    dataKey="pedidos"
-                    nameKey="estado"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={90}
-                    label={({ name, value }) => `${name}: ${value}`}
-                  >
-                    {data.porEstado.map((e, i) => (
-                      <Cell key={i} fill={colorEstado(e.estado, i)} />
-                    ))}
-                  </Pie>
-                  <Legend wrapperStyle={{ fontSize: 12, color: "#cfcfcf" }} />
-                </PieChart>
-              </ResponsiveContainer>
+            <Panel titulo="Pedidos por estado" vacio={data.porEstado.length === 0}>
+              <div className="flex flex-col items-center gap-4 sm:flex-row">
+                <div className="w-full sm:w-1/2">
+                  <ResponsiveContainer width="100%" height={200}>
+                    <PieChart>
+                      <Pie
+                        data={data.porEstado}
+                        dataKey="pedidos"
+                        nameKey="estado"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={45}
+                        outerRadius={75}
+                        paddingAngle={2}
+                      >
+                        {data.porEstado.map((e, i) => (
+                          <Cell key={i} fill={colorEstado(e.estado, i)} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        formatter={(value) => [NUM(Number(value)), "Pedidos"]}
+                        {...TOOLTIP_STYLE}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="flex w-full flex-col gap-1.5 text-sm sm:flex-1">
+                  {data.porEstado.map((e, i) => (
+                    <div
+                      key={e.estado}
+                      className="flex items-center justify-between"
+                    >
+                      <span className="flex items-center gap-2 text-muted-2">
+                        <span
+                          className="h-2.5 w-2.5 rounded-full"
+                          style={{ background: colorEstado(e.estado, i) }}
+                        />
+                        {e.estado}
+                      </span>
+                      <span className="font-semibold text-white">
+                        {e.pedidos}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </Panel>
           </div>
         )}
       </div>
 
-      <LoadingOverlay visible={cargando} texto="Cargando métricas..." />
+      <LoadingOverlay visible={cargando && !data} texto="Cargando métricas..." />
     </div>
   );
 }
