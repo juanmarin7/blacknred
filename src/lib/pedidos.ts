@@ -16,6 +16,8 @@ import type {
   InitialData,
   Order,
   PedidoRow,
+  PeriodoResumen,
+  ResumenVentas,
   VistaPedidos,
 } from "./types";
 
@@ -281,6 +283,130 @@ export async function saveOrder(
     await agregarFilas(SHEET_VENTAS, filas);
     return { ok: true as const, codigo };
   });
+}
+
+/* ─────────────── Resumen / tablero (admin) ─────────────── */
+
+/** Medianoche (hora local) de la fecha "dd/MM/yyyy ..." de la hoja, o null. */
+function parseFechaVenta(s: unknown): Date | null {
+  const m = String(s ?? "")
+    .trim()
+    .match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (!m) return null;
+  return new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
+}
+
+/** "Hoy" a medianoche en hora de Colombia (el servidor corre en UTC). */
+function hoyBogota(): Date {
+  const p = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Bogota",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const v = (t: string) => Number(p.find((x) => x.type === t)?.value);
+  return new Date(v("year"), v("month") - 1, v("day"));
+}
+
+function resumenMock(periodo: PeriodoResumen): ResumenVentas {
+  return {
+    periodo,
+    montoTotal: 7_840_000,
+    numPedidos: 18,
+    ticketPromedio: 435_555,
+    porVendedor: [
+      { nombre: "Juan Esteban", monto: 4_200_000, pedidos: 10 },
+      { nombre: "Carolina", monto: 3_640_000, pedidos: 8 },
+    ],
+    porDia: [
+      { fecha: "14/06", monto: 1_200_000, pedidos: 3 },
+      { fecha: "15/06", monto: 980_000, pedidos: 2 },
+      { fecha: "16/06", monto: 2_100_000, pedidos: 5 },
+      { fecha: "17/06", monto: 1_560_000, pedidos: 4 },
+      { fecha: "18/06", monto: 2_000_000, pedidos: 4 },
+    ],
+    porEstado: [
+      { estado: "Pedido", pedidos: 7 },
+      { estado: "Enviado", pedidos: 6 },
+      { estado: "Facturado", pedidos: 5 },
+    ],
+  };
+}
+
+export async function getResumenVentas(
+  periodo: PeriodoResumen,
+): Promise<ResumenVentas> {
+  if (mockActivo()) return resumenMock(periodo);
+
+  // A Codigo | B Fecha | G Vendedor | O Total | P Estado | Q Precio
+  const data = await leerRango(`${SHEET_VENTAS}!A2:R`);
+
+  const hoy = hoyBogota();
+  const desdeSemana = new Date(hoy);
+  desdeSemana.setDate(hoy.getDate() - 6);
+
+  const enPeriodo = (d: Date): boolean => {
+    if (periodo === "hoy") return d.getTime() === hoy.getTime();
+    if (periodo === "semana") return d >= desdeSemana && d <= hoy;
+    return d.getFullYear() === hoy.getFullYear() && d.getMonth() === hoy.getMonth();
+  };
+
+  const vendMap = new Map<string, { monto: number; cods: Set<string> }>();
+  const diaMap = new Map<
+    string,
+    { label: string; monto: number; cods: Set<string> }
+  >();
+  const estadoMap = new Map<string, Set<string>>();
+  const codsGlobal = new Set<string>();
+  let montoTotal = 0;
+
+  for (const row of data) {
+    const codigo = String(row[0] ?? "");
+    if (!codigo) continue;
+    const fecha = parseFechaVenta(row[1]);
+    if (!fecha || !enPeriodo(fecha)) continue;
+
+    const vendedor = String(row[6] ?? "").trim() || "—";
+    const estado = String(row[15] ?? "").trim() || "—";
+    const monto = toNumber(row[14]) * toNumber(row[16]);
+
+    montoTotal += monto;
+    codsGlobal.add(codigo);
+
+    const v = vendMap.get(vendedor) ?? { monto: 0, cods: new Set() };
+    v.monto += monto;
+    v.cods.add(codigo);
+    vendMap.set(vendedor, v);
+
+    const claveDia = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}-${String(fecha.getDate()).padStart(2, "0")}`;
+    const labelDia = `${String(fecha.getDate()).padStart(2, "0")}/${String(fecha.getMonth() + 1).padStart(2, "0")}`;
+    const dia = diaMap.get(claveDia) ?? { label: labelDia, monto: 0, cods: new Set() };
+    dia.monto += monto;
+    dia.cods.add(codigo);
+    diaMap.set(claveDia, dia);
+
+    const e = estadoMap.get(estado) ?? new Set();
+    e.add(codigo);
+    estadoMap.set(estado, e);
+  }
+
+  const numPedidos = codsGlobal.size;
+
+  return {
+    periodo,
+    montoTotal,
+    numPedidos,
+    ticketPromedio: numPedidos ? Math.round(montoTotal / numPedidos) : 0,
+    porVendedor: [...vendMap.entries()]
+      .map(([nombre, v]) => ({ nombre, monto: v.monto, pedidos: v.cods.size }))
+      .sort((a, b) => b.monto - a.monto),
+    porDia: [...diaMap.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([, d]) => ({ fecha: d.label, monto: d.monto, pedidos: d.cods.size })),
+    porEstado: [...estadoMap.entries()]
+      .map(([estado, cods]) => ({ estado, pedidos: cods.size }))
+      .sort((a, b) => b.pedidos - a.pedidos),
+  };
 }
 
 /* ─────────────── Despacho: parciales / totales / estados ─────────────── */

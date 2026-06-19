@@ -378,7 +378,7 @@ export default function UsuariosAdmin({
             </h2>
             <p className="mt-2 text-sm text-muted-2">
               Para <strong className="text-white">{passwordInfo.email}</strong>.
-              Cópiala y pásasela; se le pedirá cambiarla al primer ingreso.
+              Recuerda copiar la contraseña y enviarsela al usuario; se le pedirá cambiarla al primer ingreso.
             </p>
 
             <div className="my-4 rounded-lg border border-line bg-surface-2 px-4 py-3 text-center text-lg font-bold tracking-wide text-accent select-all">

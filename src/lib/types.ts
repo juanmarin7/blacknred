@@ -71,3 +71,15 @@ export interface Order {
 }
 
 export type VistaPedidos = "despacho" | "facturacion" | "estados";
+
+export type PeriodoResumen = "hoy" | "semana" | "mes";
+
+export interface ResumenVentas {
+  periodo: PeriodoResumen;
+  montoTotal: number;
+  numPedidos: number;
+  ticketPromedio: number;
+  porVendedor: { nombre: string; monto: number; pedidos: number }[];
+  porDia: { fecha: string; monto: number; pedidos: number }[];
+  porEstado: { estado: string; pedidos: number }[];
+}

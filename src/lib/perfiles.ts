@@ -7,6 +7,7 @@ export const VISTAS: { ruta: string; label: string }[] = [
   { ruta: "/tv", label: "Pendientes TV" },
   { ruta: "/facturacion", label: "Facturación" },
   { ruta: "/estados", label: "Vista Estados" },
+  { ruta: "/admin/tablero", label: "Tablero (métricas)" },
   { ruta: "/admin/usuarios", label: "Administrar usuarios" },
 ];
 
@@ -17,6 +18,7 @@ export const ACCESOS: Record<Perfil, string[]> = {
     "/tv",
     "/facturacion",
     "/estados",
+    "/admin/tablero",
     "/admin/usuarios",
   ],
   vendedor: ["/pedidos", "/estados"],
