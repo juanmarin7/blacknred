@@ -295,40 +295,60 @@ export default function TableroAdmin() {
 
   function exportarCSV() {
     if (!data) return;
+    const money = (n: number) => `$${Math.round(n).toLocaleString("es-CO")}`;
+    const generado = new Date().toLocaleString("es-CO", {
+      dateStyle: "short",
+      timeStyle: "short",
+    });
+    const periodoLabel =
+      PERIODOS.find((p) => p.value === periodo)?.label ?? periodo;
+
     const filas: (string | number)[][] = [
-      ["Resumen", PERIODOS.find((p) => p.value === periodo)?.label ?? periodo],
-      ["Rango", `${data.rango.desde} - ${data.rango.hasta}`],
+      ["TABLERO — BLACK & RED"],
+      ["Periodo", periodoLabel],
+      ["Rango", `${data.rango.desde} a ${data.rango.hasta}`],
       ["Vendedor", data.vendedor ?? "Todos"],
+      ["Generado", generado],
       [],
+      ["RESUMEN"],
       ["Métrica", "Valor"],
-      ["Total vendido", data.montoTotal],
+      ["Total vendido", money(data.montoTotal)],
       ["Pedidos", data.numPedidos],
-      ["Ticket promedio", data.ticketPromedio],
-      ["Facturado", data.montoFacturado],
-      ["Por cobrar", data.montoPorCobrar],
-      ["En proceso", data.montoEnProceso],
-      ["Sin despachar (pedidos)", data.sinDespachar.pedidos],
+      ["Ticket promedio", money(data.ticketPromedio)],
+      ["Facturado", money(data.montoFacturado)],
+      ["Por cobrar", money(data.montoPorCobrar)],
+      ["En proceso", money(data.montoEnProceso)],
+      ["Pedidos sin despachar", data.sinDespachar.pedidos],
       [],
+      ["VENTAS POR VENDEDOR"],
       ["Vendedor", "Monto", "Pedidos"],
-      ...data.porVendedor.map((v) => [v.nombre, v.monto, v.pedidos]),
+      ...data.porVendedor.map((v) => [v.nombre, money(v.monto), v.pedidos]),
       [],
+      ["TOP PRODUCTOS"],
       ["Producto", "Monto", "Pedidos", "Unidades"],
       ...data.topProductos.map((p) => [
         p.nombre,
-        p.monto,
+        money(p.monto),
         p.pedidos,
         p.unidades ?? 0,
       ]),
       [],
+      ["TOP CLIENTES"],
       ["Cliente", "Monto", "Pedidos"],
-      ...data.topClientes.map((c) => [c.nombre, c.monto, c.pedidos]),
+      ...data.topClientes.map((c) => [c.nombre, money(c.monto), c.pedidos]),
       [],
+      ["VENTAS POR DÍA"],
       ["Día", "Monto", "Pedidos"],
-      ...data.porDia.map((d) => [d.fecha, d.monto, d.pedidos]),
+      ...data.porDia.map((d) => [d.fecha, money(d.monto), d.pedidos]),
     ];
-    const csv = filas
-      .map((f) => f.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
-      .join("\n");
+
+    // Separador ';' para que Excel en español lo abra en columnas.
+    const esc = (c: string | number) => {
+      const s = String(c);
+      return /[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const csv =
+      "sep=;\n" + filas.map((f) => f.map(esc).join(";")).join("\n");
     const url = URL.createObjectURL(
       new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" }),
     );
