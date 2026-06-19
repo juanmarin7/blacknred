@@ -23,7 +23,37 @@ const PERIODOS: { value: PeriodoResumen; label: string }[] = [
   { value: "mes", label: "Este mes" },
 ];
 
-const COLORES_ESTADO = ["#ff3b3b", "#1e9b3c", "#3c7bdb", "#d9a300", "#7b1e1e"];
+/**
+ * Paleta de la analítica: variada y suave sobre fondo oscuro (el rojo de la
+ * marca se reserva como acento, no se usa para llenar gráficos). Centralizada
+ * aquí para que nuevos paneles/cálculos reutilicen los mismos colores.
+ */
+const PALETA = [
+  "#4f9cf9", // azul
+  "#22c55e", // verde
+  "#a78bfa", // morado
+  "#f59e0b", // ámbar
+  "#2dd4bf", // teal
+  "#f472b6", // rosa
+  "#60a5fa", // azul claro
+  "#fb923c", // naranja
+];
+
+const COLOR_SERIE = "#4f9cf9"; // color base para series de un solo valor (por día)
+
+/** Color por índice (vendedores u otras categorías). */
+const colorPorIndice = (i: number) => PALETA[i % PALETA.length];
+
+/** Color semántico por estado del pedido; cae a la paleta si no se reconoce. */
+function colorEstado(estado: string, i: number): string {
+  const e = estado.toLowerCase();
+  if (e.includes("facturad")) return "#22c55e"; // verde = cobrado
+  if (e.includes("enviad")) return "#4f9cf9"; // azul = despachado
+  if (e.includes("parcial")) return "#a78bfa"; // morado = parcial
+  if (e.includes("modificad")) return "#2dd4bf"; // teal
+  if (e.includes("pedido")) return "#f59e0b"; // ámbar = pendiente
+  return colorPorIndice(i);
+}
 
 const COP = (n: number) =>
   n.toLocaleString("es-CO", {
@@ -113,7 +143,7 @@ export default function TableroAdmin() {
               }}
               className={`rounded-md border px-4 py-2 text-sm font-semibold transition-colors ${
                 periodo === p.value
-                  ? "border-wine bg-wine text-white"
+                  ? "border-[#4f9cf9] bg-[#4f9cf9]/20 text-white"
                   : "border-line-strong text-muted hover:text-white"
               }`}
             >
@@ -167,7 +197,7 @@ export default function TableroAdmin() {
                     }}
                     cursor={{ fill: "rgba(255,255,255,0.05)" }}
                   />
-                  <Bar dataKey="monto" fill="#ff3b3b" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="monto" fill={COLOR_SERIE} radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </Panel>
@@ -211,7 +241,11 @@ export default function TableroAdmin() {
                     }}
                     cursor={{ fill: "rgba(255,255,255,0.05)" }}
                   />
-                  <Bar dataKey="monto" fill="#7b1e1e" radius={[0, 4, 4, 0]} />
+                  <Bar dataKey="monto" radius={[0, 4, 4, 0]}>
+                    {data.porVendedor.map((_, i) => (
+                      <Cell key={i} fill={colorPorIndice(i)} />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </Panel>
@@ -232,11 +266,8 @@ export default function TableroAdmin() {
                     outerRadius={90}
                     label={({ name, value }) => `${name}: ${value}`}
                   >
-                    {data.porEstado.map((_, i) => (
-                      <Cell
-                        key={i}
-                        fill={COLORES_ESTADO[i % COLORES_ESTADO.length]}
-                      />
+                    {data.porEstado.map((e, i) => (
+                      <Cell key={i} fill={colorEstado(e.estado, i)} />
                     ))}
                   </Pie>
                   <Legend wrapperStyle={{ fontSize: 12, color: "#cfcfcf" }} />
