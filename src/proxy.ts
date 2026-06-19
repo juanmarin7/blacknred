@@ -59,7 +59,22 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  if (user && pathname === "/login") {
+  // Usuario con contraseña temporal: forzar el cambio antes de cualquier vista.
+  const debeCambiarPassword =
+    user?.user_metadata?.must_change_password === true;
+  if (
+    user &&
+    debeCambiarPassword &&
+    pathname !== "/cambiar-password" &&
+    !pathname.startsWith("/api/")
+  ) {
+    const cambiarUrl = request.nextUrl.clone();
+    cambiarUrl.pathname = "/cambiar-password";
+    cambiarUrl.search = "";
+    return NextResponse.redirect(cambiarUrl);
+  }
+
+  if (user && !debeCambiarPassword && pathname === "/login") {
     const panelUrl = request.nextUrl.clone();
     panelUrl.pathname = "/panel";
     panelUrl.search = "";

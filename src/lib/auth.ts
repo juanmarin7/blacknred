@@ -5,6 +5,7 @@ import { esPerfil, puedeAcceder } from "./perfiles";
 import type { Perfil } from "./types";
 
 export interface Sesion {
+  id: string;
   email: string;
   nombre: string;
   perfil: Perfil;
@@ -15,7 +16,7 @@ export interface Sesion {
  * del correo: toma la parte antes del `@`, separa por `. _ -` y capitaliza.
  * Ej: "juan.marin@black.com" → "Juan Marin".
  */
-function nombreDesdeEmail(email: string | undefined): string {
+export function nombreDesdeEmail(email: string | undefined): string {
   const local = email?.split("@")[0];
   if (!local) return "";
   return local
@@ -36,7 +37,7 @@ export async function getSesion(): Promise<Sesion | null> {
   if (!authConfigurada()) {
     // Solo en desarrollo: permite previsualizar la app sin Supabase.
     if (process.env.NODE_ENV === "development") {
-      return { email: "dev@local", nombre: "Dev", perfil: "admin" };
+      return { id: "dev", email: "dev@local", nombre: "Dev", perfil: "admin" };
     }
     return null;
   }
@@ -56,7 +57,7 @@ export async function getSesion(): Promise<Sesion | null> {
     (meta.display_name as string | undefined)?.trim();
   const nombre = nombreMeta || nombreDesdeEmail(user.email) || "";
 
-  return { email: user.email ?? "", nombre, perfil };
+  return { id: user.id, email: user.email ?? "", nombre, perfil };
 }
 
 /** Para páginas (Server Components): redirige si no hay sesión o no hay acceso. */
