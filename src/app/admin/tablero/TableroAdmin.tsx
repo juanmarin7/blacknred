@@ -16,7 +16,7 @@ import {
   YAxis,
 } from "recharts";
 import AppHeader from "@/components/AppHeader";
-import LoadingOverlay from "@/components/LoadingOverlay";
+import PantallaCarga from "@/components/PantallaCarga";
 import type { PeriodoResumen, RankingItem, ResumenVentas } from "@/lib/types";
 
 const PERIODOS: { value: PeriodoResumen; label: string }[] = [
@@ -714,7 +714,7 @@ export default function TableroAdmin() {
         )}
       </div>
 
-      <LoadingOverlay visible={cargando && !data} texto="Cargando métricas..." />
+      {cargando && !data && <PantallaCarga />}
     </div>
   );
 }

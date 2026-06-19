@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import AppHeader from "@/components/AppHeader";
 import Combobox from "@/components/Combobox";
 import LoadingOverlay from "@/components/LoadingOverlay";
+import PantallaCarga from "@/components/PantallaCarga";
 import Modal from "@/components/Modal";
 import { LOGO_FOOTER_URL } from "@/lib/branding";
 import { esCantidadTallas } from "@/lib/tallas";
@@ -362,7 +363,7 @@ export default function PedidosForm() {
     return (
       <>
         <AppHeader titulo="Registro de pedidos" />
-        <LoadingOverlay visible texto="Cargando datos..." />
+        <PantallaCarga />
       </>
     );
   }

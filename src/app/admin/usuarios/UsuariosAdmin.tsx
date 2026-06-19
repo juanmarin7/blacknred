@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import AppHeader from "@/components/AppHeader";
 import LoadingOverlay from "@/components/LoadingOverlay";
+import PantallaCarga from "@/components/PantallaCarga";
 import Modal from "@/components/Modal";
 import type { Perfil } from "@/lib/types";
 import type { UsuarioAdmin } from "@/lib/usuarios";
@@ -403,7 +404,8 @@ export default function UsuariosAdmin({
         )}
       </Modal>
 
-      <LoadingOverlay visible={cargando || trabajando} texto="Procesando..." />
+      {cargando && <PantallaCarga />}
+      <LoadingOverlay visible={trabajando} texto="Procesando..." />
     </div>
   );
 }

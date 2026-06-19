@@ -4,6 +4,7 @@ import { useState } from "react";
 import AppHeader from "@/components/AppHeader";
 import EstadoBadge from "@/components/EstadoBadge";
 import LoadingOverlay from "@/components/LoadingOverlay";
+import PantallaCarga from "@/components/PantallaCarga";
 import Modal from "@/components/Modal";
 import TallaBadges from "@/components/TallaBadges";
 import { usePedidos } from "@/lib/usePedidos";
@@ -66,7 +67,7 @@ export default function FacturacionView() {
         )}
 
         {pedidos === null ? (
-          <LoadingOverlay visible texto="Cargando pedidos..." />
+          <PantallaCarga />
         ) : ordenados.length === 0 ? (
           <div className="mt-20 text-center text-2xl font-light text-[#555]">
             No hay pedidos enviados por facturar
