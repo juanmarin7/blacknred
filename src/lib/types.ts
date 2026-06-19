@@ -82,6 +82,16 @@ export interface RankingItem {
   unidades?: number;
 }
 
+export interface PedidoPendiente {
+  codigo: string;
+  cliente: string;
+  vendedor: string;
+  estado: string;
+  /** Días desde la fecha del pedido. */
+  dias: number;
+  monto: number;
+}
+
 export interface ResumenVentas {
   periodo: PeriodoResumen;
   /** Rango de fechas cubierto (dd/MM/yyyy) para mostrar en el encabezado. */
@@ -102,8 +112,19 @@ export interface ResumenVentas {
   porEstado: { estado: string; pedidos: number }[];
   topProductos: RankingItem[];
   topClientes: RankingItem[];
-  /** Pedidos del periodo aún sin despachar (estado Pedido/Parcial). */
-  sinDespachar: { pedidos: number; diasMasViejo: number };
+  /**
+   * Pedidos pendientes de despacho (estado Pedido/Parcial) de TODO el historial
+   * — no se limita al periodo, para no perder los más atascados. Respeta el
+   * filtro de vendedor.
+   */
+  pendientes: {
+    total: number;
+    monto: number;
+    /** Distribución por antigüedad. */
+    buckets: { rango: string; pedidos: number }[];
+    /** Los más antiguos (top 8). */
+    masAntiguos: PedidoPendiente[];
+  };
   /** Comparativo contra el periodo anterior equivalente. */
   comparativo: {
     montoAnterior: number;

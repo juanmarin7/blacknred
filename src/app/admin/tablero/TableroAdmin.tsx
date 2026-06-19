@@ -57,6 +57,16 @@ function colorEstado(estado: string, i: number): string {
   return colorPorIndice(i);
 }
 
+// Colores por antigüedad de pendientes (verde → rojo, más viejo = más urgente).
+const COLOR_DIAS = ["#22c55e", "#f59e0b", "#fb923c", "#ff5252"];
+const colorBucket = (i: number) => COLOR_DIAS[i] ?? "#ff5252";
+function colorDias(d: number): string {
+  if (d <= 2) return COLOR_DIAS[0];
+  if (d <= 7) return COLOR_DIAS[1];
+  if (d <= 15) return COLOR_DIAS[2];
+  return COLOR_DIAS[3];
+}
+
 const COP = (n: number) =>
   n.toLocaleString("es-CO", {
     style: "currency",
@@ -318,7 +328,18 @@ export default function TableroAdmin() {
       ["Facturado", money(data.montoFacturado)],
       ["Por cobrar", money(data.montoPorCobrar)],
       ["En proceso", money(data.montoEnProceso)],
-      ["Pedidos sin despachar", data.sinDespachar.pedidos],
+      ["Pendientes de despacho", data.pendientes.total],
+      [],
+      ["PENDIENTES MÁS ANTIGUOS"],
+      ["Código", "Cliente", "Vendedor", "Estado", "Días", "Monto"],
+      ...data.pendientes.masAntiguos.map((p) => [
+        p.codigo,
+        p.cliente,
+        p.vendedor,
+        p.estado,
+        p.dias,
+        money(p.monto),
+      ]),
       [],
       ["VENTAS POR VENDEDOR"],
       ["Vendedor", "Monto", "Pedidos"],
@@ -451,19 +472,90 @@ export default function TableroAdmin() {
               <Tarjeta titulo="Por cobrar" valor={COP(data.montoPorCobrar)} />
             </div>
 
-            {/* Alerta: pedidos sin despachar */}
-            {data.sinDespachar.pedidos > 0 && (
+            {/* Alerta: pedidos pendientes de despacho */}
+            {data.pendientes.total > 0 && (
               <div className="rounded-lg border border-[#f59e0b]/40 bg-[#f59e0b]/10 px-4 py-3 text-sm text-[#f5c879]">
-                ⚠ {data.sinDespachar.pedidos} pedido
-                {data.sinDespachar.pedidos === 1 ? "" : "s"} sin despachar
-                {data.sinDespachar.diasMasViejo > 0 && (
+                ⚠ {data.pendientes.total} pedido
+                {data.pendientes.total === 1 ? "" : "s"} pendiente
+                {data.pendientes.total === 1 ? "" : "s"} de despacho
+                {data.pendientes.masAntiguos[0]?.dias > 0 && (
                   <>
                     {" "}
-                    · el más antiguo hace {data.sinDespachar.diasMasViejo} día
-                    {data.sinDespachar.diasMasViejo === 1 ? "" : "s"}
+                    · el más antiguo hace{" "}
+                    {data.pendientes.masAntiguos[0].dias} día
+                    {data.pendientes.masAntiguos[0].dias === 1 ? "" : "s"}
                   </>
                 )}
               </div>
+            )}
+
+            {/* Pendientes de despacho (todo el historial) */}
+            {data.pendientes.total > 0 && (
+              <Panel
+                titulo="Pendientes de despacho"
+                vacio={false}
+                accion={
+                  <span className="text-xs text-muted-2">
+                    todo el historial · {COP(data.pendientes.monto)}
+                  </span>
+                }
+              >
+                <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {data.pendientes.buckets.map((b, i) => (
+                    <div
+                      key={b.rango}
+                      className="rounded-lg border p-3 text-center"
+                      style={{ borderColor: colorBucket(i) + "55" }}
+                    >
+                      <div
+                        className="text-xl font-bold"
+                        style={{ color: colorBucket(i) }}
+                      >
+                        {b.pedidos}
+                      </div>
+                      <div className="text-[11px] text-muted-2">{b.rango}</div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[520px] text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-line text-xs tracking-wider text-muted uppercase">
+                        <th className="py-2 pr-2">Pedido</th>
+                        <th className="py-2 pr-2">Cliente</th>
+                        <th className="py-2 pr-2">Vendedor</th>
+                        <th className="py-2 pr-2 text-right">Días</th>
+                        <th className="py-2 text-right">Monto</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.pendientes.masAntiguos.map((p) => (
+                        <tr key={p.codigo} className="border-b border-line-soft">
+                          <td className="py-2 pr-2 font-semibold text-white">
+                            #{p.codigo}
+                          </td>
+                          <td className="py-2 pr-2 text-muted-2">{p.cliente}</td>
+                          <td className="py-2 pr-2 text-muted-2">
+                            {p.vendedor}
+                          </td>
+                          <td className="py-2 pr-2 text-right">
+                            <span
+                              className="font-bold"
+                              style={{ color: colorDias(p.dias) }}
+                            >
+                              {p.dias}d
+                            </span>
+                          </td>
+                          <td className="py-2 text-right text-white">
+                            {COP(p.monto)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Panel>
             )}
 
             {/* Tendencia de ventas por día */}

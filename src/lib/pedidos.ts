@@ -308,50 +308,44 @@ function hoyBogota(): Date {
   return new Date(v("year"), v("month") - 1, v("day"));
 }
 
+/**
+ * Resumen vacío para modo MOCK (local sin credenciales de Google, MOCK_SHEETS=1).
+ * No inventa datos: devuelve todo en cero. En QA/PROD nunca se usa porque ahí
+ * `mockActivo()` es false y se lee la hoja real.
+ */
 function resumenMock(periodo: PeriodoResumen): ResumenVentas {
   return {
     periodo,
-    rango: { desde: "01/06/2026", hasta: "18/06/2026" },
+    rango: { desde: "—", hasta: "—" },
     vendedor: null,
-    vendedoresDisponibles: ["Juan Esteban", "Carolina"],
-    montoTotal: 7_840_000,
-    numPedidos: 18,
-    ticketPromedio: 435_555,
-    montoFacturado: 5_100_000,
-    montoPorCobrar: 1_900_000,
-    montoEnProceso: 840_000,
-    porVendedor: [
-      { nombre: "Juan Esteban", monto: 4_200_000, pedidos: 10 },
-      { nombre: "Carolina", monto: 3_640_000, pedidos: 8 },
-    ],
-    porDia: [
-      { fecha: "14/06", monto: 1_200_000, pedidos: 3 },
-      { fecha: "15/06", monto: 980_000, pedidos: 2 },
-      { fecha: "16/06", monto: 2_100_000, pedidos: 5 },
-      { fecha: "17/06", monto: 1_560_000, pedidos: 4 },
-      { fecha: "18/06", monto: 2_000_000, pedidos: 4 },
-    ],
-    porEstado: [
-      { estado: "Pedido", pedidos: 7 },
-      { estado: "Enviado", pedidos: 6 },
-      { estado: "Facturado", pedidos: 5 },
-    ],
-    topProductos: [
-      { nombre: "Camiseta básica", monto: 3_100_000, pedidos: 9, unidades: 68 },
-      { nombre: "Boxer clásico", monto: 2_600_000, pedidos: 7, unidades: 50 },
-      { nombre: "Medias deportivas", monto: 2_140_000, pedidos: 6, unidades: 119 },
-    ],
-    topClientes: [
-      { nombre: "Almacén El Punto · Local 12", monto: 3_300_000, pedidos: 8 },
-      { nombre: "Variedades Sofi · Local 8", monto: 2_540_000, pedidos: 6 },
-      { nombre: "Distribuciones JR · Bodega 3", monto: 2_000_000, pedidos: 4 },
-    ],
-    sinDespachar: { pedidos: 4, diasMasViejo: 6 },
+    vendedoresDisponibles: [],
+    montoTotal: 0,
+    numPedidos: 0,
+    ticketPromedio: 0,
+    montoFacturado: 0,
+    montoPorCobrar: 0,
+    montoEnProceso: 0,
+    porVendedor: [],
+    porDia: [],
+    porEstado: [],
+    topProductos: [],
+    topClientes: [],
+    pendientes: {
+      total: 0,
+      monto: 0,
+      buckets: [
+        { rango: "0–2 días", pedidos: 0 },
+        { rango: "3–7 días", pedidos: 0 },
+        { rango: "8–15 días", pedidos: 0 },
+        { rango: "16+ días", pedidos: 0 },
+      ],
+      masAntiguos: [],
+    },
     comparativo: {
-      montoAnterior: 6_900_000,
-      numPedidosAnterior: 16,
-      variacionMonto: 13.6,
-      variacionPedidos: 12.5,
+      montoAnterior: 0,
+      numPedidosAnterior: 0,
+      variacionMonto: null,
+      variacionPedidos: null,
     },
   };
 }
@@ -414,8 +408,11 @@ export async function getResumenVentas(
   const estadoMap = new Map<string, Set<string>>();
   const vendedoresSet = new Set<string>();
   const codsGlobal = new Set<string>();
-  const sinDespacharCods = new Set<string>();
-  let sinDespacharMasViejo: Date | null = null;
+  // Pendientes de despacho de TODO el historial (no por periodo)
+  const pendMap = new Map<
+    string,
+    { fecha: Date; monto: number; cliente: string; vendedor: string; estado: string }
+  >();
   let montoTotal = 0;
   let montoFacturado = 0;
   let montoPorCobrar = 0;
@@ -431,12 +428,28 @@ export async function getResumenVentas(
     const fecha = parseFechaVenta(row[1]);
     if (!fecha) continue;
 
+    const vendedor = String(row[6] ?? "").trim() || "—";
+    const estado = String(row[15] ?? "").trim() || "—";
+    const estadoL = estado.toLowerCase();
+    const monto = toNumber(row[14]) * toNumber(row[16]);
+
+    // ── Pendientes de despacho: TODO el historial (respeta filtro de vendedor) ──
+    const esPendiente =
+      !estadoL.includes("facturad") && !estadoL.includes("enviad");
+    if (esPendiente && (!filtro || vendedor === filtro)) {
+      const cli = String(row[2] ?? "").trim() || "—";
+      const p =
+        pendMap.get(codigo) ??
+        { fecha, monto: 0, cliente: cli, vendedor, estado };
+      if (fecha < p.fecha) p.fecha = fecha;
+      p.monto += monto;
+      pendMap.set(codigo, p);
+    }
+
+    // ── Ventas por periodo ──
     const enCur = enRango(fecha, curIni, curFin);
     const enPrev = enRango(fecha, prevIni, prevFin);
     if (!enCur && !enPrev) continue;
-
-    const vendedor = String(row[6] ?? "").trim() || "—";
-    const monto = toNumber(row[14]) * toNumber(row[16]);
 
     if (enPrev) {
       if (filtro && vendedor !== filtro) continue;
@@ -452,22 +465,12 @@ export async function getResumenVentas(
     const producto = String(row[8] ?? "").trim() || "—";
     const cliente = String(row[2] ?? "").trim() || "—";
     const local = String(row[3] ?? "").trim();
-    const estado = String(row[15] ?? "").trim() || "—";
-    const estadoL = estado.toLowerCase();
 
     montoTotal += monto;
     codsGlobal.add(codigo);
-    if (estadoL.includes("facturad")) {
-      montoFacturado += monto;
-    } else if (estadoL.includes("enviad")) {
-      montoPorCobrar += monto;
-    } else {
-      montoEnProceso += monto;
-      sinDespacharCods.add(codigo);
-      if (!sinDespacharMasViejo || fecha < sinDespacharMasViejo) {
-        sinDespacharMasViejo = fecha;
-      }
-    }
+    if (estadoL.includes("facturad")) montoFacturado += monto;
+    else if (estadoL.includes("enviad")) montoPorCobrar += monto;
+    else montoEnProceso += monto;
 
     acumular(vendMap, vendedor, monto, codigo);
     acumular(prodMap, producto, monto, codigo);
@@ -502,9 +505,24 @@ export async function getResumenVentas(
     `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 
   const diaMs = 1000 * 60 * 60 * 24;
-  const diasMasViejo = sinDespacharMasViejo
-    ? Math.floor((hoy.getTime() - sinDespacharMasViejo.getTime()) / diaMs)
-    : 0;
+
+  // Pendientes de despacho: antigüedad por bucket + los más viejos
+  const pendArr = [...pendMap.entries()].map(([codigo, p]) => ({
+    codigo,
+    cliente: p.cliente,
+    vendedor: p.vendedor,
+    estado: p.estado,
+    dias: Math.floor((hoy.getTime() - p.fecha.getTime()) / diaMs),
+    monto: p.monto,
+  }));
+  const bucketDe = (d: number) =>
+    d <= 2 ? "0–2 días" : d <= 7 ? "3–7 días" : d <= 15 ? "8–15 días" : "16+ días";
+  const BUCKETS = ["0–2 días", "3–7 días", "8–15 días", "16+ días"];
+  const bucketCount = new Map<string, number>();
+  for (const p of pendArr) {
+    const b = bucketDe(p.dias);
+    bucketCount.set(b, (bucketCount.get(b) ?? 0) + 1);
+  }
 
   return {
     periodo,
@@ -531,7 +549,17 @@ export async function getResumenVentas(
       unidades: prodUnidades.get(p.nombre) ?? 0,
     })),
     topClientes: ranking(cliMap, 5),
-    sinDespachar: { pedidos: sinDespacharCods.size, diasMasViejo },
+    pendientes: {
+      total: pendArr.length,
+      monto: pendArr.reduce((s, p) => s + p.monto, 0),
+      buckets: BUCKETS.map((rango) => ({
+        rango,
+        pedidos: bucketCount.get(rango) ?? 0,
+      })),
+      masAntiguos: [...pendArr]
+        .sort((a, b) => b.dias - a.dias)
+        .slice(0, 8),
+    },
     comparativo: {
       montoAnterior: montoPrev,
       numPedidosAnterior,
