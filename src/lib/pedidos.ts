@@ -314,6 +314,8 @@ function resumenMock(periodo: PeriodoResumen): ResumenVentas {
     montoTotal: 7_840_000,
     numPedidos: 18,
     ticketPromedio: 435_555,
+    montoFacturado: 5_100_000,
+    montoPendiente: 2_740_000,
     porVendedor: [
       { nombre: "Juan Esteban", monto: 4_200_000, pedidos: 10 },
       { nombre: "Carolina", monto: 3_640_000, pedidos: 8 },
@@ -330,7 +332,52 @@ function resumenMock(periodo: PeriodoResumen): ResumenVentas {
       { estado: "Enviado", pedidos: 6 },
       { estado: "Facturado", pedidos: 5 },
     ],
+    topProductos: [
+      { nombre: "Camiseta básica", monto: 3_100_000, pedidos: 9 },
+      { nombre: "Boxer clásico", monto: 2_600_000, pedidos: 7 },
+      { nombre: "Medias deportivas", monto: 2_140_000, pedidos: 6 },
+    ],
+    topClientes: [
+      { nombre: "Almacén El Punto · Local 12", monto: 3_300_000, pedidos: 8 },
+      { nombre: "Variedades Sofi · Local 8", monto: 2_540_000, pedidos: 6 },
+      { nombre: "Distribuciones JR · Bodega 3", monto: 2_000_000, pedidos: 4 },
+    ],
+    comparativo: {
+      montoAnterior: 6_900_000,
+      numPedidosAnterior: 16,
+      variacionMonto: 13.6,
+      variacionPedidos: 12.5,
+    },
   };
+}
+
+interface Acumulado {
+  monto: number;
+  cods: Set<string>;
+}
+
+/** Rangos [inicio, fin] del periodo actual y del anterior equivalente. */
+function rangosPeriodo(periodo: PeriodoResumen, hoy: Date) {
+  const dias = (d: Date, n: number) => {
+    const r = new Date(d);
+    r.setDate(d.getDate() + n);
+    return r;
+  };
+
+  if (periodo === "hoy") {
+    return { curIni: hoy, curFin: hoy, prevIni: dias(hoy, -1), prevFin: dias(hoy, -1) };
+  }
+  if (periodo === "semana") {
+    const curIni = dias(hoy, -6);
+    const prevFin = dias(curIni, -1);
+    return { curIni, curFin: hoy, prevIni: dias(prevFin, -6), prevFin };
+  }
+  // mes: del 1 a hoy; anterior = mes pasado hasta el mismo día
+  const curIni = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+  const transcurridos = hoy.getDate() - 1;
+  const prevIni = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1);
+  const prevFin = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1 + transcurridos);
+  return { curIni, curFin: hoy, prevIni, prevFin };
 }
 
 export async function getResumenVentas(
@@ -338,74 +385,114 @@ export async function getResumenVentas(
 ): Promise<ResumenVentas> {
   if (mockActivo()) return resumenMock(periodo);
 
-  // A Codigo | B Fecha | G Vendedor | O Total | P Estado | Q Precio
+  // A Codigo | B Fecha | C Cliente | D Local | G Vendedor | I Producto | O Total | P Estado | Q Precio
   const data = await leerRango(`${SHEET_VENTAS}!A2:R`);
 
   const hoy = hoyBogota();
-  const desdeSemana = new Date(hoy);
-  desdeSemana.setDate(hoy.getDate() - 6);
+  const { curIni, curFin, prevIni, prevFin } = rangosPeriodo(periodo, hoy);
+  const enRango = (d: Date, ini: Date, fin: Date) => d >= ini && d <= fin;
 
-  const enPeriodo = (d: Date): boolean => {
-    if (periodo === "hoy") return d.getTime() === hoy.getTime();
-    if (periodo === "semana") return d >= desdeSemana && d <= hoy;
-    return d.getFullYear() === hoy.getFullYear() && d.getMonth() === hoy.getMonth();
+  const acumular = (m: Map<string, Acumulado>, clave: string, monto: number, cod: string) => {
+    const a = m.get(clave) ?? { monto: 0, cods: new Set<string>() };
+    a.monto += monto;
+    a.cods.add(cod);
+    m.set(clave, a);
   };
 
-  const vendMap = new Map<string, { monto: number; cods: Set<string> }>();
-  const diaMap = new Map<
-    string,
-    { label: string; monto: number; cods: Set<string> }
-  >();
+  const vendMap = new Map<string, Acumulado>();
+  const prodMap = new Map<string, Acumulado>();
+  const cliMap = new Map<string, Acumulado>();
+  const diaMap = new Map<string, { label: string } & Acumulado>();
   const estadoMap = new Map<string, Set<string>>();
   const codsGlobal = new Set<string>();
   let montoTotal = 0;
+  let montoFacturado = 0;
+  let montoPendiente = 0;
+
+  // Periodo anterior (solo totales para el comparativo)
+  const codsPrev = new Set<string>();
+  let montoPrev = 0;
 
   for (const row of data) {
     const codigo = String(row[0] ?? "");
     if (!codigo) continue;
     const fecha = parseFechaVenta(row[1]);
-    if (!fecha || !enPeriodo(fecha)) continue;
+    if (!fecha) continue;
 
-    const vendedor = String(row[6] ?? "").trim() || "—";
-    const estado = String(row[15] ?? "").trim() || "—";
+    const enCur = enRango(fecha, curIni, curFin);
+    const enPrev = enRango(fecha, prevIni, prevFin);
+    if (!enCur && !enPrev) continue;
+
     const monto = toNumber(row[14]) * toNumber(row[16]);
+
+    if (enPrev) {
+      montoPrev += monto;
+      codsPrev.add(codigo);
+      continue;
+    }
+
+    // Periodo actual: acumula todos los desgloses
+    const vendedor = String(row[6] ?? "").trim() || "—";
+    const producto = String(row[8] ?? "").trim() || "—";
+    const cliente = String(row[2] ?? "").trim() || "—";
+    const local = String(row[3] ?? "").trim();
+    const estado = String(row[15] ?? "").trim() || "—";
 
     montoTotal += monto;
     codsGlobal.add(codigo);
+    if (estado.toLowerCase().includes("facturad")) montoFacturado += monto;
+    else montoPendiente += monto;
 
-    const v = vendMap.get(vendedor) ?? { monto: 0, cods: new Set() };
-    v.monto += monto;
-    v.cods.add(codigo);
-    vendMap.set(vendedor, v);
+    acumular(vendMap, vendedor, monto, codigo);
+    acumular(prodMap, producto, monto, codigo);
+    acumular(cliMap, local ? `${cliente} · ${local}` : cliente, monto, codigo);
 
     const claveDia = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}-${String(fecha.getDate()).padStart(2, "0")}`;
     const labelDia = `${String(fecha.getDate()).padStart(2, "0")}/${String(fecha.getMonth() + 1).padStart(2, "0")}`;
-    const dia = diaMap.get(claveDia) ?? { label: labelDia, monto: 0, cods: new Set() };
+    const dia = diaMap.get(claveDia) ?? { label: labelDia, monto: 0, cods: new Set<string>() };
     dia.monto += monto;
     dia.cods.add(codigo);
     diaMap.set(claveDia, dia);
 
-    const e = estadoMap.get(estado) ?? new Set();
+    const e = estadoMap.get(estado) ?? new Set<string>();
     e.add(codigo);
     estadoMap.set(estado, e);
   }
 
   const numPedidos = codsGlobal.size;
+  const numPedidosAnterior = codsPrev.size;
+  const variacion = (actual: number, anterior: number): number | null =>
+    anterior > 0 ? Math.round(((actual - anterior) / anterior) * 1000) / 10 : null;
+
+  const ranking = (m: Map<string, Acumulado>, limite?: number) => {
+    const arr = [...m.entries()]
+      .map(([nombre, a]) => ({ nombre, monto: a.monto, pedidos: a.cods.size }))
+      .sort((a, b) => b.monto - a.monto);
+    return limite ? arr.slice(0, limite) : arr;
+  };
 
   return {
     periodo,
     montoTotal,
     numPedidos,
     ticketPromedio: numPedidos ? Math.round(montoTotal / numPedidos) : 0,
-    porVendedor: [...vendMap.entries()]
-      .map(([nombre, v]) => ({ nombre, monto: v.monto, pedidos: v.cods.size }))
-      .sort((a, b) => b.monto - a.monto),
+    montoFacturado,
+    montoPendiente,
+    porVendedor: ranking(vendMap),
     porDia: [...diaMap.entries()]
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([, d]) => ({ fecha: d.label, monto: d.monto, pedidos: d.cods.size })),
     porEstado: [...estadoMap.entries()]
       .map(([estado, cods]) => ({ estado, pedidos: cods.size }))
       .sort((a, b) => b.pedidos - a.pedidos),
+    topProductos: ranking(prodMap, 5),
+    topClientes: ranking(cliMap, 5),
+    comparativo: {
+      montoAnterior: montoPrev,
+      numPedidosAnterior,
+      variacionMonto: variacion(montoTotal, montoPrev),
+      variacionPedidos: variacion(numPedidos, numPedidosAnterior),
+    },
   };
 }
 

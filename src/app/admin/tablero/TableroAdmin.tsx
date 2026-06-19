@@ -15,7 +15,7 @@ import {
 } from "recharts";
 import AppHeader from "@/components/AppHeader";
 import LoadingOverlay from "@/components/LoadingOverlay";
-import type { PeriodoResumen, ResumenVentas } from "@/lib/types";
+import type { PeriodoResumen, RankingItem, ResumenVentas } from "@/lib/types";
 
 const PERIODOS: { value: PeriodoResumen; label: string }[] = [
   { value: "hoy", label: "Hoy" },
@@ -68,12 +68,76 @@ const COP_CORTO = (n: number) => {
   return `$${n}`;
 };
 
-function Tarjeta({ titulo, valor }: { titulo: string; valor: string }) {
+const TOOLTIP_STYLE = {
+  contentStyle: {
+    background: "#1a1a1a",
+    border: "1px solid #2a2a2a",
+    borderRadius: 8,
+    color: "#fff",
+  },
+  labelStyle: { color: "#fff", fontWeight: 600 },
+  itemStyle: { color: "#fff" },
+  cursor: { fill: "rgba(255,255,255,0.05)" },
+} as const;
+
+function Tarjeta({
+  titulo,
+  valor,
+  delta,
+}: {
+  titulo: string;
+  valor: string;
+  delta?: number | null;
+}) {
   return (
     <div className="rounded-[10px] border border-line bg-surface p-4">
       <div className="text-xs tracking-wider text-muted uppercase">{titulo}</div>
       <div className="mt-1 text-2xl font-bold text-white md:text-3xl">{valor}</div>
+      {delta != null && (
+        <div
+          className={`mt-1 text-xs font-semibold ${
+            delta >= 0 ? "text-[#22c55e]" : "text-[#ff6b6b]"
+          }`}
+        >
+          {delta >= 0 ? "▲" : "▼"} {Math.abs(delta).toFixed(1)}%{" "}
+          <span className="font-normal text-muted">vs anterior</span>
+        </div>
+      )}
     </div>
+  );
+}
+
+/** Barras horizontales por monto (vendedores, productos, clientes). */
+function BarrasHorizontales({ data }: { data: RankingItem[] }) {
+  return (
+    <ResponsiveContainer width="100%" height={Math.max(160, data.length * 44)}>
+      <BarChart layout="vertical" data={data} margin={{ left: 8 }}>
+        <XAxis
+          type="number"
+          tickFormatter={COP_CORTO}
+          tick={{ fill: "#9a9a9a", fontSize: 12 }}
+          tickLine={false}
+          axisLine={{ stroke: "#2a2a2a" }}
+        />
+        <YAxis
+          type="category"
+          dataKey="nombre"
+          tick={{ fill: "#cfcfcf", fontSize: 12 }}
+          tickLine={false}
+          axisLine={{ stroke: "#2a2a2a" }}
+          width={130}
+        />
+        <Tooltip
+          formatter={(value) => [COP(Number(value)), "Monto"]}
+          {...TOOLTIP_STYLE}
+        />
+        <Bar dataKey="monto" radius={[0, 4, 4, 0]}>
+          {data.map((_, i) => (
+            <Cell key={i} fill={colorPorIndice(i)} />
+          ))}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
   );
 }
 
@@ -162,8 +226,16 @@ export default function TableroAdmin() {
           <div className="flex flex-col gap-4">
             {/* Tarjetas */}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <Tarjeta titulo="Total vendido" valor={COP(data.montoTotal)} />
-              <Tarjeta titulo="Pedidos" valor={String(data.numPedidos)} />
+              <Tarjeta
+                titulo="Total vendido"
+                valor={COP(data.montoTotal)}
+                delta={data.comparativo.variacionMonto}
+              />
+              <Tarjeta
+                titulo="Pedidos"
+                valor={String(data.numPedidos)}
+                delta={data.comparativo.variacionPedidos}
+              />
               <Tarjeta
                 titulo="Ticket promedio"
                 valor={COP(data.ticketPromedio)}
@@ -204,55 +276,64 @@ export default function TableroAdmin() {
               </ResponsiveContainer>
             </Panel>
 
-            {/* Ventas por vendedor */}
-            <Panel
-              titulo="Ventas por vendedor"
-              vacio={data.porVendedor.length === 0}
-            >
-              <ResponsiveContainer
-                width="100%"
-                height={Math.max(160, data.porVendedor.length * 48)}
+            <div className="grid gap-4 md:grid-cols-2">
+              {/* Ventas por vendedor */}
+              <Panel
+                titulo="Ventas por vendedor"
+                vacio={data.porVendedor.length === 0}
               >
-                <BarChart
-                  layout="vertical"
-                  data={data.porVendedor}
-                  margin={{ left: 8 }}
-                >
-                  <XAxis
-                    type="number"
-                    tickFormatter={COP_CORTO}
-                    tick={{ fill: "#9a9a9a", fontSize: 12 }}
-                    tickLine={false}
-                    axisLine={{ stroke: "#2a2a2a" }}
-                  />
-                  <YAxis
-                    type="category"
-                    dataKey="nombre"
-                    tick={{ fill: "#cfcfcf", fontSize: 12 }}
-                    tickLine={false}
-                    axisLine={{ stroke: "#2a2a2a" }}
-                    width={110}
-                  />
-                  <Tooltip
-                    formatter={(value) => [COP(Number(value)), "Monto"]}
-                    contentStyle={{
-                      background: "#1a1a1a",
-                      border: "1px solid #2a2a2a",
-                      borderRadius: 8,
-                      color: "#fff",
-                    }}
-                    labelStyle={{ color: "#fff", fontWeight: 600 }}
-                    itemStyle={{ color: "#fff" }}
-                    cursor={{ fill: "rgba(255,255,255,0.05)" }}
-                  />
-                  <Bar dataKey="monto" radius={[0, 4, 4, 0]}>
-                    {data.porVendedor.map((_, i) => (
-                      <Cell key={i} fill={colorPorIndice(i)} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </Panel>
+                <BarrasHorizontales data={data.porVendedor} />
+              </Panel>
+
+              {/* Facturado vs pendiente */}
+              <Panel
+                titulo="Ventas reales vs pendientes"
+                vacio={data.montoTotal === 0}
+              >
+                <ResponsiveContainer width="100%" height={240}>
+                  <PieChart>
+                    <Pie
+                      data={[
+                        { name: "Facturado", value: data.montoFacturado },
+                        { name: "Pendiente", value: data.montoPendiente },
+                      ]}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={55}
+                      outerRadius={90}
+                      label={({ name, value }) =>
+                        `${name}: ${COP_CORTO(Number(value))}`
+                      }
+                    >
+                      <Cell fill="#22c55e" />
+                      <Cell fill="#f59e0b" />
+                    </Pie>
+                    <Tooltip
+                      formatter={(value) => [COP(Number(value)), "Monto"]}
+                      {...TOOLTIP_STYLE}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 12, color: "#cfcfcf" }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </Panel>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              {/* Top productos */}
+              <Panel
+                titulo="Top productos"
+                vacio={data.topProductos.length === 0}
+              >
+                <BarrasHorizontales data={data.topProductos} />
+              </Panel>
+
+              {/* Top clientes */}
+              <Panel titulo="Top clientes" vacio={data.topClientes.length === 0}>
+                <BarrasHorizontales data={data.topClientes} />
+              </Panel>
+            </div>
 
             {/* Pedidos por estado */}
             <Panel

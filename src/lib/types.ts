@@ -74,12 +74,31 @@ export type VistaPedidos = "despacho" | "facturacion" | "estados";
 
 export type PeriodoResumen = "hoy" | "semana" | "mes";
 
+export interface RankingItem {
+  nombre: string;
+  monto: number;
+  pedidos: number;
+}
+
 export interface ResumenVentas {
   periodo: PeriodoResumen;
   montoTotal: number;
   numPedidos: number;
   ticketPromedio: number;
-  porVendedor: { nombre: string; monto: number; pedidos: number }[];
+  /** Ventas reales (estado Facturado) vs lo que aún no se factura. */
+  montoFacturado: number;
+  montoPendiente: number;
+  porVendedor: RankingItem[];
   porDia: { fecha: string; monto: number; pedidos: number }[];
   porEstado: { estado: string; pedidos: number }[];
+  topProductos: RankingItem[];
+  topClientes: RankingItem[];
+  /** Comparativo contra el periodo anterior equivalente. */
+  comparativo: {
+    montoAnterior: number;
+    numPedidosAnterior: number;
+    /** Variación % (null si el periodo anterior fue 0). */
+    variacionMonto: number | null;
+    variacionPedidos: number | null;
+  };
 }
