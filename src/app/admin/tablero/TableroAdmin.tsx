@@ -365,35 +365,58 @@ export default function TableroAdmin() {
 
               {/* Estado de cobro */}
               <Panel titulo="Estado de cobro" vacio={data.montoTotal === 0}>
-                <ResponsiveContainer width="100%" height={240}>
-                  <PieChart>
-                    <Pie
-                      data={[
-                        { name: "Facturado", value: data.montoFacturado },
-                        { name: "Por cobrar", value: data.montoPorCobrar },
-                        { name: "En proceso", value: data.montoEnProceso },
-                      ]}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={55}
-                      outerRadius={90}
-                      label={({ name, value }) =>
-                        `${name}: ${COP_CORTO(Number(value))}`
-                      }
-                    >
-                      <Cell fill="#22c55e" />
-                      <Cell fill="#4f9cf9" />
-                      <Cell fill="#f59e0b" />
-                    </Pie>
-                    <Tooltip
-                      formatter={(value) => [COP(Number(value)), "Monto"]}
-                      {...TOOLTIP_STYLE}
-                    />
-                    <Legend wrapperStyle={{ fontSize: 12, color: "#cfcfcf" }} />
-                  </PieChart>
-                </ResponsiveContainer>
+                {(() => {
+                  const cobro = [
+                    { name: "Facturado", value: data.montoFacturado, color: "#22c55e" },
+                    { name: "Por cobrar", value: data.montoPorCobrar, color: "#4f9cf9" },
+                    { name: "En proceso", value: data.montoEnProceso, color: "#f59e0b" },
+                  ];
+                  return (
+                    <>
+                      <ResponsiveContainer width="100%" height={200}>
+                        <PieChart>
+                          <Pie
+                            data={cobro}
+                            dataKey="value"
+                            nameKey="name"
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={52}
+                            outerRadius={80}
+                            paddingAngle={2}
+                          >
+                            {cobro.map((c) => (
+                              <Cell key={c.name} fill={c.color} />
+                            ))}
+                          </Pie>
+                          <Tooltip
+                            formatter={(value) => [COP(Number(value)), "Monto"]}
+                            {...TOOLTIP_STYLE}
+                          />
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <div className="mt-2 flex flex-col gap-1.5 text-sm">
+                        {cobro.map((c) => (
+                          <div
+                            key={c.name}
+                            className="flex items-center justify-between"
+                          >
+                            <span className="flex items-center gap-2 text-muted-2">
+                              <span
+                                className="h-2.5 w-2.5 rounded-full"
+                                style={{ background: c.color }}
+                              />
+                              {c.name}
+                            </span>
+                            <span className="font-semibold text-white">
+                              {COP(c.value)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  );
+                })()}
               </Panel>
             </div>
 
