@@ -1,20 +1,38 @@
 # Black & Red — Web App (Next.js + Tailwind + PWA)
 
-Migración de la app de Apps Script a Next.js. Misma funcionalidad, mismos
-estilos, los datos siguen viviendo en la misma Google Sheet. Instalable como
-PWA en el celular.
+Migración de la app de pedidos de Apps Script a Next.js. Misma funcionalidad y
+estilos; los datos de pedidos siguen viviendo en la misma Google Sheet. El login
+y los usuarios viven en Supabase. Instalable como PWA en el celular.
 
-## Vistas
+Stack: **Next.js 16** (App Router, `src/proxy.ts` en vez de middleware),
+**Tailwind v4**, **TypeScript**, **Supabase Auth**, **Google Sheets** como base de
+datos, **recharts** para el tablero.
 
-| Ruta | Equivalente Apps Script | Perfiles con acceso |
+> ⚠️ Esta versión de Next tiene breaking changes (ver `AGENTS.md`): antes de
+> tocar APIs de Next, leer los docs en `node_modules/next/dist/docs/`.
+
+## Vistas y perfiles
+
+Perfiles: `admin`, `vendedor`, `facturador`, `despachador` (en
+`app_metadata.perfil`). El acceso por ruta se define en `src/lib/perfiles.ts`.
+
+| Ruta | Qué es | Perfiles con acceso |
 |---|---|---|
-| `/login` | login | público |
-| `/panel` | panel del login | todos (con sesión) |
-| `/pedidos` | formulario | admin, vendedor |
-| `/despacho` | vista pendientes (editable) | admin, despachador |
-| `/tv` | vista pendientes TV (solo lectura) | admin, despachador, o llave `?key=` |
-| `/facturacion` | vista facturación | admin, facturador |
-| `/estados` | vista vendedor | admin, vendedor, despachador |
+| `/login` | inicio de sesión | público |
+| `/panel` | menú según perfil | todos (con sesión) |
+| `/pedidos` | formulario de pedidos | admin, vendedor |
+| `/despacho` | pendientes de despacho (editable) | admin, despachador |
+| `/tv` | pantalla TV (solo lectura) | admin, despachador, o llave `?key=` |
+| `/facturacion` | facturación | admin, facturador |
+| `/estados` | vista de estados | admin, vendedor, despachador |
+| `/admin/usuarios` | gestión de usuarios | **admin** |
+| `/admin/tablero` | tablero de métricas | **admin** |
+| `/cambiar-password` | cambio obligatorio de clave temporal | con sesión |
+
+El **vendedor de cada pedido es el usuario autenticado** que lo registra: se
+guarda su `display_name` (col G de la hoja Ventas) y su correo (col H). El nombre
+sale de `user_metadata.display_name` (o `nombre`), con fallback derivado del
+correo.
 
 ## Correr en local (modo demo, sin credenciales)
 
@@ -23,83 +41,117 @@ npm install
 npm run dev
 ```
 
-`.env.local` ya viene con `MOCK_SHEETS=1`: la app abre en
-http://localhost:3000 con datos de ejemplo y sin login (en desarrollo entra
-como admin). Sirve para revisar el diseño y los flujos.
+`.env.local` trae `MOCK_SHEETS=1`: abre en http://localhost:3000 con datos de
+ejemplo y sin login (en desarrollo entra como admin). El tablero y el módulo de
+usuarios corren en modo vacío en local (no hay datos inventados). Todo lo real se
+prueba en el deploy de QA.
 
-## Conectar la Google Sheet real
+## Variables de entorno
 
-1. Entra a https://console.cloud.google.com → crea un proyecto (o usa uno).
-2. **APIs y servicios → Biblioteca** → habilita **Google Sheets API**.
-3. **IAM y administración → Cuentas de servicio** → crear cuenta de servicio
-   (p. ej. `blacknred-web`). No necesita roles del proyecto.
-4. Dentro de la cuenta → **Claves → Agregar clave → JSON**. Se descarga un
-   archivo con `client_email` y `private_key`.
-5. **Comparte la Google Sheet** (la de PROD y la de QA) con el
-   `client_email` de la cuenta de servicio como **Editor**.
-6. En `.env.local`: pon `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_PRIVATE_KEY`
-   (entre comillas, tal cual viene en el JSON) y `SPREADSHEET_ID`.
-   Quita o comenta `MOCK_SHEETS=1`.
+Copia `.env.example` a `.env.local` y complétalas (en Vercel van en
+**Settings → Environment Variables**).
 
-## Configurar el login (Supabase)
+| Variable | Para qué | Notas |
+|---|---|---|
+| `SPREADSHEET_ID` | hoja de pedidos | **único valor que difiere QA/PROD** |
+| `GOOGLE_SERVICE_ACCOUNT_EMAIL` | cuenta de servicio de Sheets | igual en todos los entornos |
+| `GOOGLE_PRIVATE_KEY` | clave de la cuenta de servicio | entre comillas, con `\n` literales |
+| `NEXT_PUBLIC_SUPABASE_URL` | proyecto Supabase | dominio pelado, **sin** `/rest/v1` |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | llave pública (publishable) | `sb_publishable_...` |
+| `SUPABASE_SERVICE_ROLE_KEY` | llave secreta para el módulo admin | `sb_secret_...` · **nunca** `NEXT_PUBLIC` · no a git |
+| `TV_ACCESS_KEY` | abrir `/tv` sin login | opcional |
+| `MOCK_SHEETS` | modo demo local | solo en local; ausente en QA/PROD |
 
-1. Crea un proyecto en https://supabase.com (plan gratuito).
-2. **Authentication → Sign In / Up** → deja solo **Email** habilitado y
-   **desactiva "Allow new users to sign up"** (registro cerrado).
-3. **Authentication → Users → Add user** → crea cada usuario con email y
-   contraseña.
-4. Asigna el perfil de cada usuario en **SQL Editor**:
+## Conectar la Google Sheet
+
+1. Google Cloud Console → proyecto → habilita **Google Sheets API**.
+2. Crea una **cuenta de servicio**, genera una **clave JSON** (`client_email` +
+   `private_key`).
+3. **Comparte la hoja de PROD y la de QA** con ese `client_email` como **Editor**.
+4. Pon `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_PRIVATE_KEY` y `SPREADSHEET_ID`.
+
+## Login y usuarios (Supabase)
+
+1. Proyecto en https://supabase.com. **Authentication** con **Email** y el
+   **registro cerrado** (no se permite auto-registro).
+2. **Llaves (sistema nuevo):** en **Settings → API Keys** usa la **publishable**
+   (`sb_publishable_...`) para `NEXT_PUBLIC_SUPABASE_ANON_KEY` y crea una
+   **secret** (`sb_secret_...`) para `SUPABASE_SERVICE_ROLE_KEY`. Deshabilita las
+   *legacy API keys* una vez migrado.
+3. **Primer admin (bootstrap manual):** crea un usuario en
+   **Authentication → Users** y asígnale el perfil:
 
    ```sql
    update auth.users
-   set raw_app_meta_data = raw_app_meta_data || '{"perfil": "admin"}'
+   set raw_app_meta_data = coalesce(raw_app_meta_data,'{}'::jsonb) || '{"perfil":"admin"}'::jsonb
    where email = 'correo@ejemplo.com';
    ```
 
-   Perfiles válidos: `admin`, `vendedor`, `facturador`, `despachador`.
-   (Opcional: nombre que se muestra en el panel)
+   Nombre visible (opcional; el módulo lo gestiona después):
 
    ```sql
    update auth.users
-   set raw_user_meta_data = raw_user_meta_data || '{"nombre": "Juan"}'
+   set raw_user_meta_data = coalesce(raw_user_meta_data,'{}'::jsonb) || '{"display_name":"Nombre Apellido"}'::jsonb
    where email = 'correo@ejemplo.com';
    ```
 
-5. En **Settings → API** copia la URL y la anon key a `.env.local`
-   (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`).
+4. **El resto de usuarios se crean desde la app** (ver abajo), sin SQL.
 
-Sin estas variables, en desarrollo la app entra directo como admin (modo
-preview); en producción exige configurarlas.
+## Módulo de administración (perfil admin)
+
+- **`/admin/usuarios`** — crear usuarios (correo, nombre, perfil), resetear
+  contraseña, activar/desactivar y eliminar. Al crear/resetear se genera una
+  **contraseña temporal** (se muestra una vez); el usuario debe **cambiarla en su
+  primer ingreso** (`/cambiar-password`, forzado por `src/proxy.ts` vía
+  `user_metadata.must_change_password`). Requiere `SUPABASE_SERVICE_ROLE_KEY`.
+- **`/admin/tablero`** — métricas: total/pedidos/ticket con comparativo vs
+  periodo anterior, tendencia, ventas por vendedor, estado de cobro, top
+  productos/clientes, **pendientes de despacho** (antigüedad de los más
+  atascados) y export a CSV. Filtro por vendedor y periodo (persistidos en la
+  URL).
 
 ## Pantalla de TV
 
-Define `TV_ACCESS_KEY=algo-secreto` y abre en el televisor:
-`https://tu-dominio/tv?key=algo-secreto` — no necesita login y solo lee.
+`TV_ACCESS_KEY=algo-secreto` y abre `https://tu-dominio/tv?key=algo-secreto`
+(sin login, solo lectura).
 
-## Deploy (Vercel)
+## Deploy y entornos (Vercel)
 
-1. Sube este folder a un repositorio de GitHub.
-2. En https://vercel.com → **Import Project** → selecciona el repo.
-3. En **Environment Variables** agrega las mismas de `.env.local`
-   (sin `MOCK_SHEETS`). Para QA puedes crear un segundo proyecto apuntando
-   al `SPREADSHEET_ID` de QA.
-4. Deploy. La PWA queda instalable desde el navegador del celular
-   ("Agregar a pantalla de inicio").
+**Un solo proyecto Vercel**, dos entornos por rama:
 
-## Logos
+| Rama | Entorno Vercel | Hoja (`SPREADSHEET_ID`) |
+|---|---|---|
+| `qa` | Preview | hoja de QA |
+| `master` | Production | hoja de PROD |
 
-Hoy se cargan de Google Drive (igual que la app original). Para mejor
-rendimiento: copia los archivos a `public/` y actualiza
-`src/lib/branding.ts`. Lo mismo aplica a los íconos de la PWA
-(`public/icons/icon-192.png` y `icon-512.png`, hoy son placeholders).
+- La **única** variable que cambia por entorno es `SPREADSHEET_ID`. La cuenta de
+  servicio y las llaves de Supabase son las mismas (la hoja de QA debe estar
+  compartida con el `client_email`).
+- `SUPABASE_SERVICE_ROLE_KEY` debe estar en **Preview y Production**.
+- Para que una rama genere Preview necesita un commit propio. Las variables
+  nuevas solo aplican tras un **redeploy**.
+- **Protección:** si el Preview pide login de Vercel, ajusta
+  **Settings → Deployment Protection** (la app igual exige su propio login).
+
+## Logos y PWA
+
+Pendiente el **logo real**: hoy `src/lib/branding.ts` carga los logos de Google
+Drive, los íconos PWA (`public/icons/icon-192.png`, `icon-512.png`) son
+placeholders, y la pantalla de carga (`src/components/PantallaCarga.tsx`) usa el
+wordmark "BLACK & RED" como placeholder. Con el archivo (PNG 1024×1024 o SVG) se
+reemplazan los tres.
 
 ## Estructura
 
-- `src/lib/sheets.ts` — acceso a Google Sheets con cache de 10 s y
-  escrituras serializadas (reemplaza `SpreadsheetApp` + `LockService`).
-- `src/lib/pedidos.ts` — toda la lógica de negocio portada de los `.gs`
-  (consecutivo, tallas, despachos parciales, estados).
-- `src/lib/tallas.ts` — parseo del formato `"S : 5 | M : 3"`.
-- `src/proxy.ts` — protege todas las rutas (sesión + perfil).
-- `src/app/api/*` — endpoints que consumen las vistas.
+- `src/lib/sheets.ts` — acceso a Google Sheets (cache 10 s, escrituras
+  serializadas; reemplaza `SpreadsheetApp` + `LockService`).
+- `src/lib/pedidos.ts` — lógica de negocio (consecutivo, tallas, despachos
+  parciales, estados) y agregación del tablero (`getResumenVentas`).
+- `src/lib/usuarios.ts` — gestión de usuarios vía Supabase Admin API.
+- `src/lib/auth.ts` / `src/lib/perfiles.ts` — sesión, perfiles y accesos.
+- `src/lib/supabase/{server,client,admin}.ts` — clientes de Supabase.
+- `src/proxy.ts` — protege rutas (sesión + perfil + cambio de clave forzado).
+- `src/app/api/*` — endpoints que consumen las vistas y el módulo admin.
+- `src/components/{PantallaCarga,BarraCarga,LoadingOverlay}.tsx` — carga branded.
 - `public/sw.js` — service worker de la PWA.
+```
