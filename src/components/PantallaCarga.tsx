@@ -1,3 +1,5 @@
+import BarraCarga from "./BarraCarga";
+
 /**
  * Pantalla de carga branded (sin logo todavía: usa el wordmark de la marca).
  * Se usa como fallback de navegación (loading.tsx) y en el splash de arranque.
@@ -13,9 +15,7 @@ export default function PantallaCarga() {
           <span className="text-white">RED</span>
         </div>
 
-        <div className="relative h-[3px] w-44 overflow-hidden rounded-full bg-line">
-          <div className="absolute inset-y-0 w-1/3 rounded-full bg-accent animate-[barra-carga_1.1s_ease-in-out_infinite]" />
-        </div>
+        <BarraCarga />
 
         <div className="text-[11px] tracking-[0.32em] text-muted-2 uppercase">
           Sistema de pedidos
