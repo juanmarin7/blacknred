@@ -13,9 +13,10 @@ export async function GET(request: NextRequest) {
   const periodo: PeriodoResumen = PERIODOS.includes(raw as PeriodoResumen)
     ? (raw as PeriodoResumen)
     : "mes";
+  const vendedor = request.nextUrl.searchParams.get("vendedor") || undefined;
 
   try {
-    return NextResponse.json(await getResumenVentas(periodo));
+    return NextResponse.json(await getResumenVentas(periodo, vendedor));
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Error generando resumen" },

@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import {
+  Area,
+  AreaChart,
   Bar,
   BarChart,
   Cell,
@@ -166,6 +168,7 @@ function Panel({
 
 export default function TableroAdmin() {
   const [periodo, setPeriodo] = useState<PeriodoResumen>("mes");
+  const [vendedor, setVendedor] = useState(""); // "" = todos
   const [data, setData] = useState<ResumenVentas | null>(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -174,7 +177,9 @@ export default function TableroAdmin() {
     let vivo = true;
     (async () => {
       try {
-        const res = await fetch(`/api/admin/resumen?periodo=${periodo}`);
+        const qs = new URLSearchParams({ periodo });
+        if (vendedor) qs.set("vendedor", vendedor);
+        const res = await fetch(`/api/admin/resumen?${qs.toString()}`);
         const body = await res.json();
         if (!vivo) return;
         if (!res.ok) throw new Error(body?.error || "Error");
@@ -189,15 +194,56 @@ export default function TableroAdmin() {
     return () => {
       vivo = false;
     };
-  }, [periodo]);
+  }, [periodo, vendedor]);
+
+  function exportarCSV() {
+    if (!data) return;
+    const filas: (string | number)[][] = [
+      ["Resumen", PERIODOS.find((p) => p.value === periodo)?.label ?? periodo],
+      ["Vendedor", data.vendedor ?? "Todos"],
+      [],
+      ["Métrica", "Valor"],
+      ["Total vendido", data.montoTotal],
+      ["Pedidos", data.numPedidos],
+      ["Ticket promedio", data.ticketPromedio],
+      ["Facturado", data.montoFacturado],
+      ["Por cobrar", data.montoPorCobrar],
+      ["En proceso", data.montoEnProceso],
+      [],
+      ["Vendedor", "Monto", "Pedidos"],
+      ...data.porVendedor.map((v) => [v.nombre, v.monto, v.pedidos]),
+      [],
+      ["Producto", "Monto", "Pedidos"],
+      ...data.topProductos.map((p) => [p.nombre, p.monto, p.pedidos]),
+      [],
+      ["Cliente", "Monto", "Pedidos"],
+      ...data.topClientes.map((c) => [c.nombre, c.monto, c.pedidos]),
+      [],
+      ["Día", "Monto", "Pedidos"],
+      ...data.porDia.map((d) => [d.fecha, d.monto, d.pedidos]),
+    ];
+    const csv = filas
+      .map((f) =>
+        f.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","),
+      )
+      .join("\n");
+    const url = URL.createObjectURL(
+      new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" }),
+    );
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `tablero-${periodo}${vendedor ? "-" + vendedor : ""}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   return (
     <div className="min-h-screen pb-16">
       <AppHeader titulo="Tablero" />
 
       <div className="mx-auto w-full max-w-[1000px] px-4 py-4">
-        {/* Selector de periodo */}
-        <div className="mb-4 flex flex-wrap gap-2">
+        {/* Controles */}
+        <div className="mb-4 flex flex-wrap items-center gap-2">
           {PERIODOS.map((p) => (
             <button
               key={p.value}
@@ -214,6 +260,31 @@ export default function TableroAdmin() {
               {p.label}
             </button>
           ))}
+
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <select
+              value={vendedor}
+              onChange={(e) => {
+                setCargando(true);
+                setVendedor(e.target.value);
+              }}
+              className="rounded-md border border-line-strong bg-surface-2 px-3 py-2 text-sm text-white focus:border-accent focus:outline-none"
+            >
+              <option value="">Todos los vendedores</option>
+              {data?.vendedoresDisponibles.map((v) => (
+                <option key={v} value={v}>
+                  {v}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={exportarCSV}
+              disabled={!data}
+              className="rounded-md border border-line-strong px-3 py-2 text-sm font-semibold text-muted transition-colors hover:text-white disabled:opacity-50"
+            >
+              ⭳ CSV
+            </button>
+          </div>
         </div>
 
         {error && (
@@ -225,7 +296,7 @@ export default function TableroAdmin() {
         {data && (
           <div className="flex flex-col gap-4">
             {/* Tarjetas */}
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
               <Tarjeta
                 titulo="Total vendido"
                 valor={COP(data.montoTotal)}
@@ -240,12 +311,19 @@ export default function TableroAdmin() {
                 titulo="Ticket promedio"
                 valor={COP(data.ticketPromedio)}
               />
+              <Tarjeta titulo="Por cobrar" valor={COP(data.montoPorCobrar)} />
             </div>
 
-            {/* Ventas por día */}
-            <Panel titulo="Ventas por día" vacio={data.porDia.length === 0}>
+            {/* Tendencia de ventas por día */}
+            <Panel titulo="Tendencia de ventas" vacio={data.porDia.length === 0}>
               <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={data.porDia}>
+                <AreaChart data={data.porDia}>
+                  <defs>
+                    <linearGradient id="gradVentas" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={COLOR_SERIE} stopOpacity={0.5} />
+                      <stop offset="100%" stopColor={COLOR_SERIE} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
                   <XAxis
                     dataKey="fecha"
                     tick={{ fill: "#9a9a9a", fontSize: 12 }}
@@ -261,41 +339,39 @@ export default function TableroAdmin() {
                   />
                   <Tooltip
                     formatter={(value) => [COP(Number(value)), "Monto"]}
-                    contentStyle={{
-                      background: "#1a1a1a",
-                      border: "1px solid #2a2a2a",
-                      borderRadius: 8,
-                      color: "#fff",
-                    }}
-                    labelStyle={{ color: "#fff", fontWeight: 600 }}
-                    itemStyle={{ color: "#fff" }}
-                    cursor={{ fill: "rgba(255,255,255,0.05)" }}
+                    {...TOOLTIP_STYLE}
                   />
-                  <Bar dataKey="monto" fill={COLOR_SERIE} radius={[4, 4, 0, 0]} />
-                </BarChart>
+                  <Area
+                    type="monotone"
+                    dataKey="monto"
+                    stroke={COLOR_SERIE}
+                    strokeWidth={2}
+                    fill="url(#gradVentas)"
+                  />
+                </AreaChart>
               </ResponsiveContainer>
             </Panel>
 
             <div className="grid gap-4 md:grid-cols-2">
-              {/* Ventas por vendedor */}
-              <Panel
-                titulo="Ventas por vendedor"
-                vacio={data.porVendedor.length === 0}
-              >
-                <BarrasHorizontales data={data.porVendedor} />
-              </Panel>
+              {/* Ventas por vendedor (oculto si se filtró a uno solo) */}
+              {!data.vendedor && (
+                <Panel
+                  titulo="Ventas por vendedor"
+                  vacio={data.porVendedor.length === 0}
+                >
+                  <BarrasHorizontales data={data.porVendedor} />
+                </Panel>
+              )}
 
-              {/* Facturado vs pendiente */}
-              <Panel
-                titulo="Ventas reales vs pendientes"
-                vacio={data.montoTotal === 0}
-              >
+              {/* Estado de cobro */}
+              <Panel titulo="Estado de cobro" vacio={data.montoTotal === 0}>
                 <ResponsiveContainer width="100%" height={240}>
                   <PieChart>
                     <Pie
                       data={[
                         { name: "Facturado", value: data.montoFacturado },
-                        { name: "Pendiente", value: data.montoPendiente },
+                        { name: "Por cobrar", value: data.montoPorCobrar },
+                        { name: "En proceso", value: data.montoEnProceso },
                       ]}
                       dataKey="value"
                       nameKey="name"
@@ -308,6 +384,7 @@ export default function TableroAdmin() {
                       }
                     >
                       <Cell fill="#22c55e" />
+                      <Cell fill="#4f9cf9" />
                       <Cell fill="#f59e0b" />
                     </Pie>
                     <Tooltip

@@ -311,11 +311,14 @@ function hoyBogota(): Date {
 function resumenMock(periodo: PeriodoResumen): ResumenVentas {
   return {
     periodo,
+    vendedor: null,
+    vendedoresDisponibles: ["Juan Esteban", "Carolina"],
     montoTotal: 7_840_000,
     numPedidos: 18,
     ticketPromedio: 435_555,
     montoFacturado: 5_100_000,
-    montoPendiente: 2_740_000,
+    montoPorCobrar: 1_900_000,
+    montoEnProceso: 840_000,
     porVendedor: [
       { nombre: "Juan Esteban", monto: 4_200_000, pedidos: 10 },
       { nombre: "Carolina", monto: 3_640_000, pedidos: 8 },
@@ -382,11 +385,13 @@ function rangosPeriodo(periodo: PeriodoResumen, hoy: Date) {
 
 export async function getResumenVentas(
   periodo: PeriodoResumen,
+  filtroVendedor?: string,
 ): Promise<ResumenVentas> {
   if (mockActivo()) return resumenMock(periodo);
 
   // A Codigo | B Fecha | C Cliente | D Local | G Vendedor | I Producto | O Total | P Estado | Q Precio
   const data = await leerRango(`${SHEET_VENTAS}!A2:R`);
+  const filtro = filtroVendedor?.trim() || null;
 
   const hoy = hoyBogota();
   const { curIni, curFin, prevIni, prevFin } = rangosPeriodo(periodo, hoy);
@@ -404,10 +409,12 @@ export async function getResumenVentas(
   const cliMap = new Map<string, Acumulado>();
   const diaMap = new Map<string, { label: string } & Acumulado>();
   const estadoMap = new Map<string, Set<string>>();
+  const vendedoresSet = new Set<string>();
   const codsGlobal = new Set<string>();
   let montoTotal = 0;
   let montoFacturado = 0;
-  let montoPendiente = 0;
+  let montoPorCobrar = 0;
+  let montoEnProceso = 0;
 
   // Periodo anterior (solo totales para el comparativo)
   const codsPrev = new Set<string>();
@@ -423,25 +430,31 @@ export async function getResumenVentas(
     const enPrev = enRango(fecha, prevIni, prevFin);
     if (!enCur && !enPrev) continue;
 
+    const vendedor = String(row[6] ?? "").trim() || "—";
     const monto = toNumber(row[14]) * toNumber(row[16]);
 
     if (enPrev) {
+      if (filtro && vendedor !== filtro) continue;
       montoPrev += monto;
       codsPrev.add(codigo);
       continue;
     }
 
-    // Periodo actual: acumula todos los desgloses
-    const vendedor = String(row[6] ?? "").trim() || "—";
+    // Periodo actual
+    vendedoresSet.add(vendedor); // el selector muestra a todos, aunque haya filtro
+    if (filtro && vendedor !== filtro) continue;
+
     const producto = String(row[8] ?? "").trim() || "—";
     const cliente = String(row[2] ?? "").trim() || "—";
     const local = String(row[3] ?? "").trim();
     const estado = String(row[15] ?? "").trim() || "—";
+    const estadoL = estado.toLowerCase();
 
     montoTotal += monto;
     codsGlobal.add(codigo);
-    if (estado.toLowerCase().includes("facturad")) montoFacturado += monto;
-    else montoPendiente += monto;
+    if (estadoL.includes("facturad")) montoFacturado += monto;
+    else if (estadoL.includes("enviad")) montoPorCobrar += monto;
+    else montoEnProceso += monto;
 
     acumular(vendMap, vendedor, monto, codigo);
     acumular(prodMap, producto, monto, codigo);
@@ -473,11 +486,16 @@ export async function getResumenVentas(
 
   return {
     periodo,
+    vendedor: filtro,
+    vendedoresDisponibles: [...vendedoresSet].sort((a, b) =>
+      a.localeCompare(b, "es"),
+    ),
     montoTotal,
     numPedidos,
     ticketPromedio: numPedidos ? Math.round(montoTotal / numPedidos) : 0,
     montoFacturado,
-    montoPendiente,
+    montoPorCobrar,
+    montoEnProceso,
     porVendedor: ranking(vendMap),
     porDia: [...diaMap.entries()]
       .sort((a, b) => a[0].localeCompare(b[0]))

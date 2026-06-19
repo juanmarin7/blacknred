@@ -82,12 +82,17 @@ export interface RankingItem {
 
 export interface ResumenVentas {
   periodo: PeriodoResumen;
+  /** Vendedor al que se filtró el tablero, o null = todos. */
+  vendedor: string | null;
+  /** Vendedores con ventas en el periodo (para el selector de filtro). */
+  vendedoresDisponibles: string[];
   montoTotal: number;
   numPedidos: number;
   ticketPromedio: number;
-  /** Ventas reales (estado Facturado) vs lo que aún no se factura. */
-  montoFacturado: number;
-  montoPendiente: number;
+  /** Reparto del monto por etapa de cobro (suman montoTotal). */
+  montoFacturado: number; // estado Facturado = cobrado
+  montoPorCobrar: number; // estado Enviado = despachado, falta facturar
+  montoEnProceso: number; // Pedido / Parcial = aún no despachado
   porVendedor: RankingItem[];
   porDia: { fecha: string; monto: number; pedidos: number }[];
   porEstado: { estado: string; pedidos: number }[];
