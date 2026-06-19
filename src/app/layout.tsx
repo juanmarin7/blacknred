@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import PwaRegister from "@/components/PwaRegister";
+import PantallaCarga from "@/components/PantallaCarga";
 
 export const metadata: Metadata = {
   title: "Black & Red",
@@ -29,6 +30,10 @@ export default function RootLayout({
   return (
     <html lang="es" className="h-full">
       <body className="flex min-h-screen flex-col">
+        {/* Splash de arranque: se desvanece solo (ver .splash-boot en globals.css) */}
+        <div className="splash-boot">
+          <PantallaCarga />
+        </div>
         <PwaRegister />
         {children}
       </body>
