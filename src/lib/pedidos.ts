@@ -43,6 +43,31 @@ const COL = {
   estado: 15, // P
 } as const;
 
+/**
+ * Parsea un número en formato colombiano (la hoja se lee con FORMATTED_VALUE):
+ * el punto es separador de miles y la coma es decimal. Sirve tanto para dinero
+ * (precio) como para cantidades grandes o el código consecutivo: cualquier
+ * valor >= 1000 llega con punto de miles y Number() lo rompería.
+ *   "43.000"   -> 43000
+ *   "1.234,50" -> 1234.5
+ *   "1.000"    -> 1000
+ *   43000      -> 43000  (ya numérico)
+ */
+export function parseNumeroCO(v: unknown): number {
+  if (typeof v === "number") return v;
+  let s = String(v ?? "").replace(/[^0-9.,-]/g, "").trim();
+  if (!s) return 0;
+  if (s.includes(",")) {
+    // coma = decimal; los puntos son separadores de miles
+    s = s.replace(/\./g, "").replace(",", ".");
+  } else {
+    // sin coma: los puntos son separadores de miles
+    s = s.replace(/\./g, "");
+  }
+  const n = Number(s);
+  return Number.isNaN(n) ? 0 : n;
+}
+
 /* ─────────────── Catálogos / datos iniciales ─────────────── */
 
 export async function getInitialData(): Promise<InitialData> {
@@ -74,7 +99,7 @@ export async function getInitialData(): Promise<InitialData> {
         .map((e) => Number(e.trim()))
         .filter(Boolean),
       color: r[3] ? String(r[3]).trim() : null,
-      precio: Number(String(r[4] ?? "").replace(/[^0-9.]/g, "")) || 0,
+      precio: parseNumeroCO(r[4]),
       unidadDocena: r[5] ? String(r[5]).trim() : "Docena",
     }));
 
@@ -244,7 +269,7 @@ export async function saveOrder(
     // Código consecutivo: último código de la hoja + 1
     const codigos = await leerRango(`${SHEET_VENTAS}!A2:A`, { fresco: true });
     const ultimo = codigos.length
-      ? toNumber(codigos[codigos.length - 1][0])
+      ? parseNumeroCO(codigos[codigos.length - 1][0])
       : 0;
     const codigo = ultimo + 1;
 
@@ -431,7 +456,7 @@ export async function getResumenVentas(
     const vendedor = String(row[6] ?? "").trim() || "—";
     const estado = String(row[15] ?? "").trim() || "—";
     const estadoL = estado.toLowerCase();
-    const monto = toNumber(row[14]) * toNumber(row[16]);
+    const monto = parseNumeroCO(row[14]) * parseNumeroCO(row[16]);
 
     // ── Pendientes de despacho: TODO el historial (respeta filtro de vendedor) ──
     const esPendiente =
@@ -474,7 +499,7 @@ export async function getResumenVentas(
 
     acumular(vendMap, vendedor, monto, codigo);
     acumular(prodMap, producto, monto, codigo);
-    prodUnidades.set(producto, (prodUnidades.get(producto) ?? 0) + toNumber(row[14]));
+    prodUnidades.set(producto, (prodUnidades.get(producto) ?? 0) + parseNumeroCO(row[14]));
     acumular(cliMap, local ? `${cliente} · ${local}` : cliente, monto, codigo);
 
     const claveDia = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}-${String(fecha.getDate()).padStart(2, "0")}`;
