@@ -336,7 +336,7 @@ export default function DespachoView() {
 
             {modo !== "menu" && (
               <div className="text-left">
-                <p className="mb-3 text-base text-[#999]">
+                <p className="mb-3 text-base text-white">
                   {modo === "parcial"
                     ? esCantidadTallas(seleccionado.cantidad)
                       ? "Cantidades a despachar (el restante queda como pedido nuevo):"
@@ -414,7 +414,7 @@ export default function DespachoView() {
             <h2 className="mb-4 text-2xl font-bold tracking-wide uppercase">
               Confirmar envio
             </h2>
-            <p className="text-base leading-relaxed text-[#999]">
+            <p className="text-base leading-relaxed text-white">
               Asegurese de tener el pedido listo antes de enviar
             </p>
             <p className="mt-2 text-sm text-muted">

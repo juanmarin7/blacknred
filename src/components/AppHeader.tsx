@@ -22,7 +22,7 @@ export default function AppHeader({ titulo, subtitulo, volver = true }: Props) {
           {titulo}
         </h1>
         {subtitulo ? (
-          <div className="mt-1 flex items-center justify-center gap-2 text-sm text-muted-2 dot-vivo md:text-base">
+          <div className="mt-1 flex items-center justify-center gap-2 text-sm text-white dot-vivo md:text-base">
             {subtitulo}
           </div>
         ) : null}

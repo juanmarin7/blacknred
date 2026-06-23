@@ -188,7 +188,7 @@ export default function FacturacionView() {
             <h2 className="mb-4 text-2xl font-bold tracking-wide uppercase">
               Facturar pedido
             </h2>
-            <p className="text-base leading-relaxed text-[#999]">
+            <p className="text-base leading-relaxed text-white">
               ¿Confirmas marcar como facturado el pedido{" "}
               <strong className="text-white">#{paraFacturar.codigo}</strong> —{" "}
               {paraFacturar.producto} de{" "}
