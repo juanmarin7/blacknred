@@ -64,9 +64,12 @@ export function invalidarCache(hoja?: string) {
 
 export async function leerRango(
   range: string,
-  opts?: { fresco?: boolean },
+  opts?: { fresco?: boolean; crudo?: boolean },
 ): Promise<string[][]> {
-  const hit = cache.get(range);
+  // `crudo` lee con UNFORMATTED_VALUE (números reales, sin formato de miles).
+  // Se cachea aparte para no mezclar la versión formateada con la cruda.
+  const cacheKey = opts?.crudo ? `${range}#crudo` : range;
+  const hit = cache.get(cacheKey);
   if (!opts?.fresco && hit && Date.now() - hit.at < TTL_MS) {
     return hit.rows;
   }
@@ -74,11 +77,11 @@ export async function leerRango(
   const res = await getClient().spreadsheets.values.get({
     spreadsheetId: spreadsheetId(),
     range,
-    valueRenderOption: "FORMATTED_VALUE",
+    valueRenderOption: opts?.crudo ? "UNFORMATTED_VALUE" : "FORMATTED_VALUE",
   });
 
   const rows = (res.data.values ?? []) as string[][];
-  cache.set(range, { at: Date.now(), rows });
+  cache.set(cacheKey, { at: Date.now(), rows });
   return rows;
 }
 

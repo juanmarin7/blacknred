@@ -75,7 +75,8 @@ export async function getInitialData(): Promise<InitialData> {
 
   const [cli, pro, emp, ven] = await Promise.all([
     leerRango("Clientes!A2:D"),
-    leerRango("Productos!A2:F"),
+    // crudo: el precio (col E) llega como número real (47000), no "47.000".
+    leerRango("Productos!A2:F", { crudo: true }),
     leerRango("TiposEmpaque!A2:B"),
     leerRango("Vendedores!A2:B"),
   ]);
