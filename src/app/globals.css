@@ -2,7 +2,7 @@
 
 @theme {
   /* Paleta Black & Red (idéntica a la app original de Apps Script) */
-  --color-base: #0a0a0a;
+  --color-bg: #0a0a0a;
   --color-surface: #111111;
   --color-surface-2: #0d0d0d;
   --color-surface-3: #151515;
@@ -28,7 +28,7 @@ html {
 }
 
 body {
-  background: var(--color-base);
+  background: var(--color-bg);
   color: #f0f0f0;
   font-family: var(--font-sans);
 }

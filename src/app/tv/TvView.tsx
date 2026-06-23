@@ -24,7 +24,7 @@ export default function TvView({ tvKey }: { tvKey?: string }) {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="flex items-center gap-5 border-b-2 border-wine bg-gradient-to-b from-surface to-base px-6">
+      <header className="flex items-center gap-5 border-b-2 border-wine bg-gradient-to-b from-surface to-bg px-6">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={LOGO_URL}

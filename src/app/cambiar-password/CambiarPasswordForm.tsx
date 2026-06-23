@@ -114,7 +114,7 @@ export default function CambiarPasswordForm({ nombre }: { nombre: string }) {
         </button>
       </form>
 
-      <footer className="fixed bottom-0 left-0 flex w-full justify-center border-t border-line-soft bg-base py-3 opacity-70">
+      <footer className="fixed bottom-0 left-0 flex w-full justify-center border-t border-line-soft bg-bg py-3 opacity-70">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={LOGO_FOOTER_URL}

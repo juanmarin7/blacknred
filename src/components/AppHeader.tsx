@@ -10,7 +10,7 @@ interface Props {
 
 export default function AppHeader({ titulo, subtitulo, volver = true }: Props) {
   return (
-    <header className="flex items-center gap-4 border-b-2 border-wine bg-gradient-to-b from-surface to-base px-4 py-3 md:px-10 md:py-5">
+    <header className="flex items-center gap-4 border-b-2 border-wine bg-gradient-to-b from-surface to-bg px-4 py-3 md:px-10 md:py-5">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={LOGO_URL}

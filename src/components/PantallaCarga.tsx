@@ -7,7 +7,7 @@ import BarraCarga from "./BarraCarga";
  */
 export default function PantallaCarga() {
   return (
-    <div className="fixed inset-0 z-[9998] flex flex-col items-center justify-center bg-base">
+    <div className="fixed inset-0 z-[9998] flex flex-col items-center justify-center bg-bg">
       <div className="animate-fade-in flex flex-col items-center gap-5">
         <div className="text-4xl font-extrabold tracking-[0.18em] md:text-5xl">
           <span className="text-white">BLACK</span>
