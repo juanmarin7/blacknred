@@ -14,6 +14,12 @@ create table if not exists public.contadores_pedido (
   valor bigint not null default 0
 );
 
+-- RLS habilitado SIN políticas: la tabla solo la toca el servidor con la
+-- service_role key (que salta RLS por diseño). Así queda bloqueada para las
+-- llaves anon/authenticated del navegador. En el SQL Editor de Supabase esto
+-- equivale a elegir "Run and enable RLS".
+alter table public.contadores_pedido enable row level security;
+
 -- Incremento atómico. `p_min` es un piso: el nuevo código siempre queda por
 -- encima de lo que ya haya en la hoja (por si alguien la edita a mano o por
 -- filas de "parcial" que reusan un código viejo). Auto-siembra en el 1er uso.
