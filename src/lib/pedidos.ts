@@ -5,6 +5,7 @@ import {
   leerRango,
   mockActivo,
 } from "./sheets";
+import { consecutivoAtomicoDisponible, siguienteCodigo } from "./consecutivo";
 import {
   calcularRestanteTallas,
   calcularTotalCantidad,
@@ -267,12 +268,29 @@ export async function saveOrder(
     const cliente = data.clientes.find((c) => c.id === order.idClienteLocal);
     if (!cliente) throw new Error("Cliente no encontrado");
 
-    // Código consecutivo: último código de la hoja + 1
+    // Código consecutivo. Piso = MÁXIMO código de la hoja (no la última fila:
+    // las filas de "parcial" reusan un código viejo y quedan al final, así que
+    // la última fila puede tener un código menor al máximo).
     const codigos = await leerRango(`${SHEET_VENTAS}!A2:A`, { fresco: true });
-    const ultimo = codigos.length
-      ? parseNumeroCO(codigos[codigos.length - 1][0])
-      : 0;
-    const codigo = ultimo + 1;
+    const maxHoja = codigos.reduce(
+      (m, r) => Math.max(m, parseNumeroCO(r[0])),
+      0,
+    );
+
+    // El consecutivo lo resuelve Postgres de forma atómica (varias instancias
+    // en Vercel). Si Supabase no está o falla, degradamos a max+1 de la hoja
+    // (riesgo de duplicado solo en esa ventana) para no bloquear la venta.
+    let codigo: number;
+    if (consecutivoAtomicoDisponible()) {
+      try {
+        codigo = await siguienteCodigo(maxHoja);
+      } catch (e) {
+        console.error("[consecutivo] fallback a max+1 de la hoja:", e);
+        codigo = maxHoja + 1;
+      }
+    } else {
+      codigo = maxHoja + 1;
+    }
 
     const fecha = fechaPedidoActual();
     const filas: (string | number)[][] = [];

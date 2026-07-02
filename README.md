@@ -97,6 +97,22 @@ Copia `.env.example` a `.env.local` y complétalas (en Vercel van en
 
 4. **El resto de usuarios se crean desde la app** (ver abajo), sin SQL.
 
+### Consecutivo atómico del código de pedido
+
+El código de pedido se genera con un **contador atómico en Postgres** (Supabase),
+no con "última fila de la hoja + 1": en Vercel corren varias instancias a la vez
+y ese cálculo podía **duplicar códigos** con pedidos simultáneos.
+
+Ejecuta **una vez** el SQL de [`sql/consecutivo.sql`](sql/consecutivo.sql) en el
+SQL Editor de Supabase (QA y PROD comparten proyecto, se corre una sola vez; el
+contador se separa por `SPREADSHEET_ID`). Se auto-siembra desde el máximo actual
+de la hoja en el primer pedido. Si Supabase falla, la app degrada a `max+1` de la
+hoja para no bloquear la venta. Prueba de concurrencia:
+
+```bash
+node --env-file=.env.local scripts/probar-consecutivo.mjs 50
+```
+
 ## Módulo de administración (perfil admin)
 
 - **`/admin/usuarios`** — crear usuarios (correo, nombre, perfil), resetear
