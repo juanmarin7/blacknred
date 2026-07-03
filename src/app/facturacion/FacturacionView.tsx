@@ -27,8 +27,9 @@ export default function FacturacionView() {
   const [procesando, setProcesando] = useState(false);
   const [errorModal, setErrorModal] = useState<string | null>(null);
 
-  // Selección para la remisión: por CÓDIGO de pedido (todas sus líneas).
-  const [seleccion, setSeleccion] = useState<Set<string>>(new Set());
+  // Selección para la remisión: por FILA (rowNumber, siempre único). Cada
+  // checkbox es independiente; no arrastra otras filas ni otros pedidos.
+  const [seleccion, setSeleccion] = useState<Set<number>>(new Set());
   const [creandoRemision, setCreandoRemision] = useState(false);
   const [errorRemision, setErrorRemision] = useState<string | null>(null);
 
@@ -40,29 +41,30 @@ export default function FacturacionView() {
       }),
     );
 
-  // Cliente "activo": el del primer pedido seleccionado. Solo se pueden
-  // seleccionar pedidos del mismo cliente para no cruzar la remisión.
-  const filaActiva = ordenados.find((p) => seleccion.has(p.codigo));
-  const clienteActivo = filaActiva?.idCliente ?? null;
+  // Cliente "activo": el de la primera fila seleccionada. Solo se pueden
+  // seleccionar filas del mismo cliente para no cruzar la remisión.
+  const clienteKey = (p: PedidoRow) => p.idCliente || p.cliente;
+  const filaActiva = ordenados.find((p) => seleccion.has(p.rowNumber));
+  const clienteActivo = filaActiva ? clienteKey(filaActiva) : null;
   const nombreClienteActivo = filaActiva?.cliente ?? "";
   const totalSeleccion = ordenados
-    .filter((p) => seleccion.has(p.codigo))
+    .filter((p) => seleccion.has(p.rowNumber))
     .reduce((s, p) => s + valorLinea(p), 0);
 
   function bloqueada(p: PedidoRow): boolean {
     return (
       clienteActivo !== null &&
-      p.idCliente !== clienteActivo &&
-      !seleccion.has(p.codigo)
+      clienteKey(p) !== clienteActivo &&
+      !seleccion.has(p.rowNumber)
     );
   }
 
-  function toggleCodigo(p: PedidoRow) {
+  function toggleFila(p: PedidoRow) {
     if (bloqueada(p)) return;
     setSeleccion((prev) => {
       const next = new Set(prev);
-      if (next.has(p.codigo)) next.delete(p.codigo);
-      else next.add(p.codigo);
+      if (next.has(p.rowNumber)) next.delete(p.rowNumber);
+      else next.add(p.rowNumber);
       return next;
     });
   }
@@ -99,7 +101,7 @@ export default function FacturacionView() {
       const res = await fetch("/api/remision", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ codigos: [...seleccion] }),
+        body: JSON.stringify({ filas: [...seleccion] }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error || `Error ${res.status}`);
@@ -167,7 +169,7 @@ export default function FacturacionView() {
                 </thead>
                 <tbody>
                   {ordenados.map((p) => {
-                    const sel = seleccion.has(p.codigo);
+                    const sel = seleccion.has(p.rowNumber);
                     return (
                       <tr
                         key={`${p.rowNumber}`}
@@ -182,7 +184,7 @@ export default function FacturacionView() {
                             type="checkbox"
                             checked={sel}
                             disabled={bloqueada(p)}
-                            onChange={() => toggleCodigo(p)}
+                            onChange={() => toggleFila(p)}
                             className="h-5 w-5 cursor-pointer accent-wine disabled:cursor-not-allowed disabled:opacity-30"
                             title={
                               bloqueada(p)
@@ -236,7 +238,7 @@ export default function FacturacionView() {
             {/* Cards móvil */}
             <div className="flex flex-col gap-3.5 md:hidden">
               {ordenados.map((p) => {
-                const sel = seleccion.has(p.codigo);
+                const sel = seleccion.has(p.rowNumber);
                 return (
                   <div
                     key={`${p.rowNumber}`}
@@ -249,7 +251,7 @@ export default function FacturacionView() {
                         type="checkbox"
                         checked={sel}
                         disabled={bloqueada(p)}
-                        onChange={() => toggleCodigo(p)}
+                        onChange={() => toggleFila(p)}
                         className="h-5 w-5 shrink-0 cursor-pointer accent-wine disabled:opacity-30"
                       />
                       <span className="text-lg font-semibold text-white">
@@ -292,7 +294,7 @@ export default function FacturacionView() {
         <div className="fixed inset-x-0 bottom-0 z-20 border-t border-line-strong bg-surface/95 px-4 py-3 shadow-[0_-4px_24px_rgba(0,0,0,0.5)] backdrop-blur md:px-10">
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
             <div className="text-sm text-white">
-              <span className="font-bold">{seleccion.size}</span> pedido(s) de{" "}
+              <span className="font-bold">{seleccion.size}</span> ítem(s) de{" "}
               <span className="font-semibold">{nombreClienteActivo}</span> ·{" "}
               <span className="font-semibold">{cop(totalSeleccion)}</span>
             </div>

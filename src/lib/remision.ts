@@ -50,18 +50,19 @@ function fechaHoyBogota(): string {
 }
 
 /**
- * Genera la remisión para los códigos seleccionados. Lanza si mezclan clientes
- * o si no hay filas válidas. Asigna el número de remisión de forma atómica.
+ * Genera la remisión para las filas seleccionadas (por número de fila de la
+ * hoja, siempre único). Lanza si mezclan clientes o si no hay filas válidas.
+ * Asigna el número de remisión de forma atómica.
  */
-export async function generarRemision(codigos: string[]): Promise<Remision> {
-  const seleccion = new Set((codigos ?? []).map((c) => String(c).trim()));
+export async function generarRemision(filasSel: number[]): Promise<Remision> {
+  const seleccion = new Set((filasSel ?? []).map((n) => Number(n)));
   if (seleccion.size === 0) {
     throw new Error("No se seleccionaron pedidos.");
   }
 
-  // Solo pedidos en facturación (Enviado), filtrados a los códigos elegidos.
+  // Solo pedidos en facturación (Enviado), filtrados a las filas elegidas.
   const enviados = await getPedidos("facturacion");
-  const filas = enviados.filter((p) => seleccion.has(String(p.codigo).trim()));
+  const filas = enviados.filter((p) => seleccion.has(p.rowNumber));
   if (filas.length === 0) {
     throw new Error("Los pedidos seleccionados ya no están disponibles.");
   }
@@ -110,6 +111,6 @@ export async function generarRemision(codigos: string[]): Promise<Remision> {
     vendedor: vendedores.join(" / "),
     items,
     granTotal,
-    codigos: [...seleccion],
+    codigos: [...new Set(filas.map((f) => f.codigo))],
   };
 }

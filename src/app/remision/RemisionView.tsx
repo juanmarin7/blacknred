@@ -85,9 +85,6 @@ export default function RemisionView() {
               >
                 {/* Placeholder del logo (reemplazar por el logo real) */}
                 <div className="text-2xl font-black tracking-tight">BR</div>
-                <div className="text-[10px] tracking-wide text-neutral-600">
-                  Siéntete bien
-                </div>
               </td>
               <td className="border border-black p-1 text-center">
                 <div className="text-base font-bold">REMISIÓN DESPACHO</div>

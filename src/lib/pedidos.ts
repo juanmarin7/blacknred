@@ -145,21 +145,27 @@ async function leerVentasProyectadas(fresco = false): Promise<PedidoRow[]> {
   if (data.length <= 1) return [];
 
   const headers = data[0];
+  // Busca la columna por nombre de encabezado; si no la encuentra (encabezado
+  // con acento/espacio/otro texto), cae al índice fijo del layout A..Q.
+  const at = (nombre: string, fallback: number) => {
+    const i = headers.indexOf(nombre);
+    return i >= 0 ? i : fallback;
+  };
   const idx = {
-    codigo: headers.indexOf("Codigo"),
-    fecha: headers.indexOf("Fecha"),
-    cliente: headers.indexOf("Nombre Cliente"),
-    local: headers.indexOf("Local"),
-    idCliente: headers.indexOf("id_cliente"),
-    vendedor: headers.indexOf("Vendedor"),
-    producto: headers.indexOf("Producto"),
-    idProducto: headers.indexOf("id_producto"),
-    cantidad: headers.indexOf("Cantidad"),
-    empaque: headers.indexOf("Tipo empaque"),
-    color: headers.indexOf("Color"),
-    estado: headers.indexOf("Estado"),
-    descripcion: headers.indexOf("descripción"),
-    precio: headers.indexOf("Precio"),
+    codigo: at("Codigo", 0),
+    fecha: at("Fecha", 1),
+    cliente: at("Nombre Cliente", 2),
+    local: at("Local", 3),
+    idCliente: at("id_cliente", 5),
+    vendedor: at("Vendedor", 6),
+    producto: at("Producto", 8),
+    idProducto: at("id_producto", 9),
+    cantidad: at("Cantidad", 10),
+    empaque: at("Tipo empaque", 11),
+    color: at("Color", 12),
+    descripcion: at("descripción", 13),
+    estado: at("Estado", 15),
+    precio: at("Precio", 16),
   };
 
   return data.slice(1).map((row, i) => ({
