@@ -367,8 +367,14 @@ export default function FacturacionView() {
       {/* Remisión: overlay dentro de la misma vista. Al imprimir, el CSS
           (.remision-print-area en globals.css) deja salir solo el documento. */}
       {remision && (
-        <div className="fixed inset-0 z-50 overflow-auto bg-black/70 p-4 print:bg-white print:p-0">
-          <div className="mx-auto max-w-[820px]">
+        <div
+          onClick={() => setRemision(null)}
+          className="fixed inset-0 z-50 overflow-auto bg-black/70 p-4 print:bg-white print:p-0"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="mx-auto max-w-[820px]"
+          >
             <div className="mb-3 flex items-center justify-between print:hidden">
               <button
                 onClick={() => setRemision(null)}
