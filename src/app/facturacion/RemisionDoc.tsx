@@ -42,7 +42,8 @@ export default function RemisionDoc({ rem }: { rem: Remision }) {
             </td>
             <td className="w-[170px] border border-black p-2 text-center align-middle">
               <div className="text-lg font-bold">
-                REM N° {String(rem.numero).padStart(4, "0")}
+                REM N°{" "}
+                {rem.numero > 0 ? String(rem.numero).padStart(4, "0") : "—"}
               </div>
             </td>
           </tr>

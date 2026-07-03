@@ -50,9 +50,18 @@ function fechaHoyBogota(): string {
 }
 
 /**
- * Genera la remisión para las filas seleccionadas (por número de fila de la
- * hoja, siempre único). Lanza si mezclan clientes o si no hay filas válidas.
- * Asigna el número de remisión de forma atómica.
+ * Asigna el SIGUIENTE número de remisión de forma atómica (consume consecutivo).
+ * Se llama solo al imprimir, no al previsualizar, para no gastar números si el
+ * facturador cierra la vista sin imprimir.
+ */
+export async function asignarNumeroRemision(): Promise<number> {
+  return mockActivo() ? 190 : siguienteRemision();
+}
+
+/**
+ * Arma la remisión para las filas seleccionadas (por número de fila de la hoja,
+ * siempre único). Lanza si mezclan clientes o si no hay filas válidas. NO asigna
+ * número (numero = 0); ese se pide aparte con `asignarNumeroRemision` al imprimir.
  */
 export async function generarRemision(filasSel: number[]): Promise<Remision> {
   const seleccion = new Set((filasSel ?? []).map((n) => Number(n)));
@@ -97,10 +106,8 @@ export async function generarRemision(filasSel: number[]): Promise<Remision> {
   // Vendedor: normalmente único; si difieren, se listan.
   const vendedores = [...new Set(filas.map((f) => f.vendedor).filter(Boolean))];
 
-  const numero = mockActivo() ? 190 : await siguienteRemision();
-
   return {
-    numero,
+    numero: 0, // se asigna al imprimir (ver asignarNumeroRemision)
     fecha: fechaHoyBogota(),
     cliente: {
       nombre: cli?.nombre || filas[0].cliente,

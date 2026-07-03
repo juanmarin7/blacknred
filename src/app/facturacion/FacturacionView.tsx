@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import AppHeader from "@/components/AppHeader";
 import EstadoBadge from "@/components/EstadoBadge";
 import LoadingOverlay from "@/components/LoadingOverlay";
@@ -35,7 +35,10 @@ export default function FacturacionView() {
   const [creandoRemision, setCreandoRemision] = useState(false);
   const [errorRemision, setErrorRemision] = useState<string | null>(null);
   // Remisión generada: se muestra en un overlay dentro de esta misma vista.
+  // El número (numero) empieza en 0 y se asigna al imprimir (no al previsualizar).
   const [remision, setRemision] = useState<Remision | null>(null);
+  const [asignandoNumero, setAsignandoNumero] = useState(false);
+  const [imprimirPend, setImprimirPend] = useState(false);
 
   const ordenados = (pedidos ?? [])
     .slice()
@@ -118,6 +121,38 @@ export default function FacturacionView() {
       setCreandoRemision(false);
     }
   }
+
+  // Imprime la remisión. Asigna el número atómico la PRIMERA vez (si numero>0 ya
+  // fue asignado, reimprime el mismo sin consumir otro consecutivo).
+  async function imprimir() {
+    if (!remision) return;
+    if (remision.numero > 0) {
+      window.print();
+      return;
+    }
+    setAsignandoNumero(true);
+    setErrorRemision(null);
+    try {
+      const res = await fetch("/api/remision/numero", { method: "POST" });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || `Error ${res.status}`);
+      setRemision((r) => (r ? { ...r, numero: data.numero as number } : r));
+      setImprimirPend(true); // el efecto imprime cuando el número está en el DOM
+    } catch (e) {
+      setErrorRemision(e instanceof Error ? e.message : "Error");
+    } finally {
+      setAsignandoNumero(false);
+    }
+  }
+
+  // Imprime una vez que el número asignado ya se reflejó en el documento.
+  useEffect(() => {
+    if (imprimirPend && remision && remision.numero > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setImprimirPend(false);
+      window.print();
+    }
+  }, [imprimirPend, remision]);
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -375,19 +410,37 @@ export default function FacturacionView() {
             onClick={(e) => e.stopPropagation()}
             className="mx-auto max-w-[820px]"
           >
-            <div className="mb-3 flex items-center justify-between print:hidden">
-              <button
-                onClick={() => setRemision(null)}
-                className="rounded-lg border border-neutral-300 bg-white px-4 py-2 text-sm font-semibold text-neutral-700 hover:bg-neutral-100"
-              >
-                Cerrar
-              </button>
-              <button
-                onClick={() => window.print()}
-                className="rounded-lg bg-neutral-900 px-6 py-2 text-sm font-bold text-white hover:bg-black"
-              >
-                Imprimir / Guardar PDF
-              </button>
+            <div className="print:hidden">
+              <div className="mb-1 flex items-center justify-between">
+                <button
+                  onClick={() => {
+                    setRemision(null);
+                    setErrorRemision(null);
+                  }}
+                  className="rounded-lg border border-neutral-300 bg-white px-4 py-2 text-sm font-semibold text-neutral-700 hover:bg-neutral-100"
+                >
+                  Cerrar
+                </button>
+                <button
+                  onClick={imprimir}
+                  disabled={asignandoNumero}
+                  className="rounded-lg bg-neutral-900 px-6 py-2 text-sm font-bold text-white hover:bg-black disabled:opacity-60"
+                >
+                  {asignandoNumero
+                    ? "Asignando N°..."
+                    : "Imprimir / Guardar PDF"}
+                </button>
+              </div>
+              {remision.numero === 0 && !errorRemision && (
+                <p className="mb-2 text-center text-xs text-neutral-300">
+                  El número de remisión (REM N°) se asigna al imprimir.
+                </p>
+              )}
+              {errorRemision && (
+                <div className="mb-2 rounded-lg border border-red-400 bg-red-500/20 px-3 py-2 text-center text-sm text-red-200">
+                  {errorRemision}
+                </div>
+              )}
             </div>
             <div className="remision-print-area">
               <RemisionDoc rem={remision} />
