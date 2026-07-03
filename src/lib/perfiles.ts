@@ -17,12 +17,13 @@ export const ACCESOS: Record<Perfil, string[]> = {
     "/despacho",
     "/tv",
     "/facturacion",
+    "/remision",
     "/estados",
     "/admin/tablero",
     "/admin/usuarios",
   ],
   vendedor: ["/pedidos", "/estados"],
-  facturador: ["/facturacion"],
+  facturador: ["/facturacion", "/remision"],
   despachador: ["/despacho", "/tv", "/estados"],
 };
 

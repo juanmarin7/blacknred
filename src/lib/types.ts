@@ -5,6 +5,10 @@ export interface Cliente {
   nombre: string;
   local: string;
   direccion: string;
+  /** Columna F de la hoja Clientes (para la remisión). */
+  telefono: string;
+  /** Columna G de la hoja Clientes (para la remisión). */
+  ciudad: string;
 }
 
 export interface Producto {
@@ -53,6 +57,16 @@ export interface PedidoRow {
   color: string;
   estado: string;
   descripcion: string;
+  /** id_producto (col J) — "REF" en la remisión. */
+  idProducto: string;
+  /** Precio unitario (col Q). Para "Valor total" en la vista y la remisión. */
+  precio: number;
+  /** Fecha del pedido (col B, texto dd/MM/yyyy...). */
+  fecha: string;
+  /** Vendedor (col G) — para la remisión. */
+  vendedor: string;
+  /** id_cliente (col F) — para cruzar tel/ciudad desde la hoja Clientes. */
+  idCliente: string;
 }
 
 export interface OrderItem {

@@ -51,7 +51,8 @@ export async function getInitialData(): Promise<InitialData> {
   if (mockActivo()) return MOCK_INITIAL;
 
   const [cli, pro, emp, ven] = await Promise.all([
-    leerRango("Clientes!A2:D"),
+    // A:G = id, nombre, local, dirección, (E), teléfono (F), ciudad (G)
+    leerRango("Clientes!A2:G"),
     // crudo: el precio (col E) llega como número real (47000), no "47.000".
     leerRango("Productos!A2:F", { crudo: true }),
     leerRango("TiposEmpaque!A2:B"),
@@ -65,6 +66,8 @@ export async function getInitialData(): Promise<InitialData> {
       nombre: String(r[1] ?? ""),
       local: String(r[2] ?? ""),
       direccion: String(r[3] ?? ""),
+      telefono: String(r[5] ?? ""),
+      ciudad: String(r[6] ?? ""),
     }));
 
   const productos = pro
@@ -144,27 +147,37 @@ async function leerVentasProyectadas(fresco = false): Promise<PedidoRow[]> {
   const headers = data[0];
   const idx = {
     codigo: headers.indexOf("Codigo"),
+    fecha: headers.indexOf("Fecha"),
     cliente: headers.indexOf("Nombre Cliente"),
     local: headers.indexOf("Local"),
+    idCliente: headers.indexOf("id_cliente"),
+    vendedor: headers.indexOf("Vendedor"),
     producto: headers.indexOf("Producto"),
+    idProducto: headers.indexOf("id_producto"),
     cantidad: headers.indexOf("Cantidad"),
     empaque: headers.indexOf("Tipo empaque"),
     color: headers.indexOf("Color"),
     estado: headers.indexOf("Estado"),
     descripcion: headers.indexOf("descripción"),
+    precio: headers.indexOf("Precio"),
   };
 
   return data.slice(1).map((row, i) => ({
     rowNumber: i + 2,
     codigo: String(row[idx.codigo] ?? ""),
+    fecha: String(row[idx.fecha] ?? ""),
     cliente: String(row[idx.cliente] ?? ""),
     local: String(row[idx.local] ?? ""),
+    idCliente: String(row[idx.idCliente] ?? ""),
+    vendedor: String(row[idx.vendedor] ?? ""),
     producto: String(row[idx.producto] ?? ""),
+    idProducto: String(row[idx.idProducto] ?? ""),
     cantidad: String(row[idx.cantidad] ?? ""),
     empaque: String(row[idx.empaque] ?? ""),
     color: String(row[idx.color] ?? ""),
     estado: String(row[idx.estado] ?? ""),
     descripcion: String(row[idx.descripcion] ?? ""),
+    precio: parseNumeroCO(row[idx.precio]),
   }));
 }
 

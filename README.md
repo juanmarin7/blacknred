@@ -113,6 +113,22 @@ hoja para no bloquear la venta. Prueba de concurrencia:
 node --env-file=.env.local scripts/probar-consecutivo.mjs 50
 ```
 
+### Remisión de despacho (facturación)
+
+En **`/facturacion`**, además del botón de estado (Facturar), hay **checkboxes**
+para seleccionar pedidos y un botón **"Crear remisión"**. Se pueden combinar
+**varios pedidos del mismo cliente** en una sola remisión (la selección bloquea
+mezclar clientes). La remisión se arma como documento HTML y se abre en
+`/remision` para **imprimir / guardar como PDF** desde el navegador (no genera
+archivo en el servidor). No cambia el estado de los pedidos.
+
+- **REM N°**: consecutivo propio, atómico. Reutiliza la tabla del consecutivo de
+  pedidos con clave `remision:<SPREADSHEET_ID>`, así que **no requiere SQL nuevo**.
+  El número inicial se define con `REMISION_INICIAL` (default 190).
+- **Datos**: la hoja `Clientes` debe tener **teléfono (col F)** y **ciudad
+  (col G)** para el encabezado. Los productos usan REF = `id_producto` y
+  `Valor total` = cantidad × precio.
+
 ## Módulo de administración (perfil admin)
 
 - **`/admin/usuarios`** — crear usuarios (correo, nombre, perfil), resetear

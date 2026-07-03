@@ -41,3 +41,30 @@ export async function siguienteCodigo(pisoHoja: number): Promise<number> {
   }
   return n;
 }
+
+/**
+ * Siguiente número de REMISIÓN, atómico. Reutiliza la misma tabla/función de
+ * Postgres con una clave aparte (`remision:<SPREADSHEET_ID>`), separada por
+ * entorno igual que el consecutivo de pedidos. Se auto-siembra desde
+ * REMISION_INICIAL (default 190): la primera remisión toma ese número.
+ */
+export async function siguienteRemision(): Promise<number> {
+  const sid = process.env.SPREADSHEET_ID ?? "default";
+  const clave = `remision:${sid}`;
+  const inicial = Number(process.env.REMISION_INICIAL ?? 190);
+  const piso = Math.max(0, Math.trunc(inicial) - 1);
+
+  const supabase = createAdminClient();
+  const { data, error } = await supabase.rpc("siguiente_codigo_pedido", {
+    p_clave: clave,
+    p_min: piso,
+  });
+  if (error) {
+    throw new Error("RPC siguiente_codigo_pedido (remisión): " + error.message);
+  }
+  const n = Number(data);
+  if (!Number.isFinite(n) || n <= 0) {
+    throw new Error("Número de remisión inválido devuelto por Postgres: " + String(data));
+  }
+  return n;
+}
