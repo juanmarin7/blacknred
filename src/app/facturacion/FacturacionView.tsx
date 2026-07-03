@@ -10,6 +10,8 @@ import TallaBadges from "@/components/TallaBadges";
 import { usePedidos } from "@/lib/usePedidos";
 import { calcularTotalCantidad } from "@/lib/tallas";
 import type { PedidoRow } from "@/lib/types";
+import type { Remision } from "@/lib/remision";
+import RemisionDoc from "./RemisionDoc";
 
 const cop = (n: number) =>
   "$ " + new Intl.NumberFormat("es-CO").format(Math.round(n));
@@ -32,6 +34,8 @@ export default function FacturacionView() {
   const [seleccion, setSeleccion] = useState<Set<number>>(new Set());
   const [creandoRemision, setCreandoRemision] = useState(false);
   const [errorRemision, setErrorRemision] = useState<string | null>(null);
+  // Remisión generada: se muestra en un overlay dentro de esta misma vista.
+  const [remision, setRemision] = useState<Remision | null>(null);
 
   const ordenados = (pedidos ?? [])
     .slice()
@@ -105,9 +109,8 @@ export default function FacturacionView() {
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error || `Error ${res.status}`);
-      // Se pasa el documento a la vista imprimible por sessionStorage.
-      sessionStorage.setItem("remision", JSON.stringify(data));
-      window.open("/remision", "_blank");
+      // Se muestra en un overlay dentro de esta misma vista (sin cambiar de tab).
+      setRemision(data as Remision);
       setSeleccion(new Set());
     } catch (e) {
       setErrorRemision(e instanceof Error ? e.message : "Error");
@@ -360,6 +363,32 @@ export default function FacturacionView() {
           </>
         )}
       </Modal>
+
+      {/* Remisión: overlay dentro de la misma vista. Al imprimir, el CSS
+          (.remision-print-area en globals.css) deja salir solo el documento. */}
+      {remision && (
+        <div className="fixed inset-0 z-50 overflow-auto bg-black/70 p-4 print:bg-white print:p-0">
+          <div className="mx-auto max-w-[820px]">
+            <div className="mb-3 flex items-center justify-between print:hidden">
+              <button
+                onClick={() => setRemision(null)}
+                className="rounded-lg border border-neutral-300 bg-white px-4 py-2 text-sm font-semibold text-neutral-700 hover:bg-neutral-100"
+              >
+                Cerrar
+              </button>
+              <button
+                onClick={() => window.print()}
+                className="rounded-lg bg-neutral-900 px-6 py-2 text-sm font-bold text-white hover:bg-black"
+              >
+                Imprimir / Guardar PDF
+              </button>
+            </div>
+            <div className="remision-print-area">
+              <RemisionDoc rem={remision} />
+            </div>
+          </div>
+        </div>
+      )}
 
       <LoadingOverlay visible={procesando} texto="Guardando..." />
     </div>

@@ -116,11 +116,13 @@ node --env-file=.env.local scripts/probar-consecutivo.mjs 50
 ### Remisión de despacho (facturación)
 
 En **`/facturacion`**, además del botón de estado (Facturar), hay **checkboxes**
-para seleccionar pedidos y un botón **"Crear remisión"**. Se pueden combinar
-**varios pedidos del mismo cliente** en una sola remisión (la selección bloquea
-mezclar clientes). La remisión se arma como documento HTML y se abre en
-`/remision` para **imprimir / guardar como PDF** desde el navegador (no genera
-archivo en el servidor). No cambia el estado de los pedidos.
+para seleccionar filas y un botón **"Crear remisión"**. Se pueden combinar
+**varias filas del mismo cliente** en una sola remisión (la selección bloquea
+mezclar clientes). La remisión se arma como documento HTML y se muestra en un
+**overlay dentro de la misma vista**; el botón **"Imprimir / Guardar PDF"** usa
+la impresión del navegador y un CSS (`.remision-print-area` en `globals.css`)
+hace que salga **solo** el documento. No genera archivo en el servidor ni cambia
+el estado de los pedidos.
 
 - **REM N°**: consecutivo propio, atómico. Reutiliza la tabla del consecutivo de
   pedidos con clave `remision:<SPREADSHEET_ID>`, así que **no requiere SQL nuevo**.

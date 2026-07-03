@@ -92,3 +92,20 @@ body {
   flex-shrink: 0;
   animation: pulse-dot 2s ease-in-out infinite;
 }
+
+/* Impresión de la remisión: solo se imprime el documento, no el resto de la
+   app. Truco de visibilidad para no romper el layout. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .remision-print-area,
+  .remision-print-area * {
+    visibility: visible;
+  }
+  .remision-print-area {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+  }
+}
