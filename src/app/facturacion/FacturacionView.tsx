@@ -326,6 +326,7 @@ export default function FacturacionView() {
                       "Producto",
                       "Cantidad",
                       "Empaque",
+                      "Valor unitario",
                       "Valor total",
                       "Descripción",
                       "Estado",
@@ -384,6 +385,9 @@ export default function FacturacionView() {
                         <td className="border-b border-line-soft px-3 py-3">
                           {p.empaque}
                         </td>
+                        <td className="border-b border-line-soft px-3 py-3 whitespace-nowrap">
+                          {cop(p.precio)}
+                        </td>
                         <td className="border-b border-line-soft px-3 py-3 font-semibold whitespace-nowrap text-white">
                           {cop(valorLinea(p))}
                         </td>
@@ -437,6 +441,7 @@ export default function FacturacionView() {
                       <TallaBadges cantidad={p.cantidad} empaque={p.empaque} />
                     </CampoCard>
                     <CampoCard label="Empaque">{p.empaque}</CampoCard>
+                    <CampoCard label="Valor unitario">{cop(p.precio)}</CampoCard>
                     <CampoCard label="Valor total">
                       <span className="font-semibold text-white">
                         {cop(valorLinea(p))}
