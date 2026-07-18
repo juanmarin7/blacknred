@@ -230,7 +230,9 @@ export default function PedidosForm() {
         color: prod.color ? color : "",
         cantidad: cantidadFinal,
         descripcion,
-        precioFinal: prod.precio || 0,
+        // Pedido del cliente: el precio NO se trae de la hoja de productos;
+        // el vendedor lo escribe (0 = sin diligenciar, el input se ve vacío).
+        precioFinal: 0,
       },
     ]);
     resetProductoForm();
@@ -241,6 +243,17 @@ export default function PedidosForm() {
   async function guardarPedido() {
     if (!items.length) {
       mostrarAlerta("Debe agregar al menos un producto.", "error");
+      return;
+    }
+
+    // El precio ya no se autollena: exigirlo evita guardar pedidos en $0
+    // (afectaría el total, el mensaje de WhatsApp y la remisión).
+    const sinPrecio = items.find((i) => !(i.precioFinal > 0));
+    if (sinPrecio) {
+      mostrarAlerta(
+        `Escriba el precio de "${sinPrecio.producto.nombre}".`,
+        "error",
+      );
       return;
     }
 
@@ -550,7 +563,8 @@ export default function PedidosForm() {
                     <input
                       type="number"
                       min={0}
-                      value={i.precioFinal}
+                      placeholder="Escriba el precio"
+                      value={i.precioFinal === 0 ? "" : i.precioFinal}
                       onChange={(e) =>
                         setItems((prev) =>
                           prev.map((it, j) =>
