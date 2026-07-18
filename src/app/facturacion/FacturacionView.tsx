@@ -21,6 +21,61 @@ function valorLinea(p: PedidoRow): number {
   return calcularTotalCantidad(p.cantidad) * p.precio;
 }
 
+/**
+ * Reutilización del REM N°: si hoy ya se asignó un número para un cliente
+ * (p. ej. imprimieron y notaron que faltó un pedido y rearman la remisión),
+ * la nueva sale con el MISMO número en vez de gastar otro consecutivo.
+ *
+ * Condición para reutilizar AUTOMÁTICO (para no trucar números de remisiones
+ * distintas del mismo cliente): mismo cliente + mismo día + la nueva remisión
+ * COMPARTE al menos un pedido (fila) con la que recibió el número. Una remisión
+ * posterior del mismo cliente con pedidos totalmente distintos NO reutiliza
+ * (consume número nuevo); solo se informa y se deja forzar a mano.
+ * Se recuerda por navegador (localStorage), solo lo del día (fecha del server).
+ */
+const STORAGE_REM = "remNumAsignados";
+
+type AsignacionRem = { numero: number; fecha: string; filas: number[] };
+type AsignacionesRem = Record<string, AsignacionRem>;
+
+function leerAsignacionesRem(): AsignacionesRem {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_REM) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function guardarAsignacionRem(
+  cliente: string,
+  numero: number,
+  fecha: string,
+  filas: number[],
+) {
+  // Solo se conservan las asignaciones de hoy, para no crecer indefinido.
+  const hoy: AsignacionesRem = {};
+  for (const [k, v] of Object.entries(leerAsignacionesRem())) {
+    if (v.fecha === fecha) hoy[k] = v;
+  }
+  hoy[cliente] = { numero, fecha, filas };
+  try {
+    localStorage.setItem(STORAGE_REM, JSON.stringify(hoy));
+  } catch {
+    // sin localStorage (modo privado): simplemente no se reutiliza
+  }
+}
+
+/** Asignación de HOY para este cliente, si existe (con o sin cruce de filas). */
+function asignacionHoy(cliente: string, fecha: string): AsignacionRem | null {
+  const v = leerAsignacionesRem()[cliente];
+  return v && v.fecha === fecha ? v : null;
+}
+
+function compartenFilas(a: number[], b: number[]): boolean {
+  const set = new Set(a);
+  return b.some((n) => set.has(n));
+}
+
 export default function FacturacionView() {
   const { pedidos, error, ultimaActualizacion, recargar } =
     usePedidos("facturacion");
@@ -39,6 +94,11 @@ export default function FacturacionView() {
   const [remision, setRemision] = useState<Remision | null>(null);
   const [asignandoNumero, setAsignandoNumero] = useState(false);
   const [imprimirPend, setImprimirPend] = useState(false);
+  // true si el REM N° mostrado se reutilizó de una asignación previa de hoy.
+  const [numeroReutilizado, setNumeroReutilizado] = useState(false);
+  // N° asignado hoy al mismo cliente pero para OTROS pedidos (sin cruce):
+  // no se reutiliza automático, solo se informa y se puede forzar.
+  const [numeroPrevioOtros, setNumeroPrevioOtros] = useState(0);
 
   const ordenados = (pedidos ?? [])
     .slice()
@@ -113,7 +173,23 @@ export default function FacturacionView() {
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error || `Error ${res.status}`);
       // Se muestra en un overlay dentro de esta misma vista (sin cambiar de tab).
-      setRemision(data as Remision);
+      // Reutilización del REM N° asignado hoy a este cliente: automática SOLO
+      // si la remisión rearmada comparte pedidos con la que recibió el número
+      // (p. ej. la repitieron porque faltó un pedido). Si es del mismo cliente
+      // pero con pedidos totalmente distintos, NO se reutiliza: se informa.
+      const rem = data as Remision;
+      const previa = asignacionHoy(rem.idCliente, rem.fecha);
+      const esLaMisma = previa !== null && compartenFilas(previa.filas, rem.filas);
+      setNumeroReutilizado(esLaMisma);
+      setNumeroPrevioOtros(!esLaMisma && previa ? previa.numero : 0);
+      if (esLaMisma && previa) {
+        // La versión rearmada pasa a ser "la" remisión de ese número: se
+        // recuerdan sus filas (unión) para próximos rearmes.
+        guardarAsignacionRem(rem.idCliente, previa.numero, rem.fecha, [
+          ...new Set([...previa.filas, ...rem.filas]),
+        ]);
+      }
+      setRemision(esLaMisma && previa ? { ...rem, numero: previa.numero } : rem);
       setSeleccion(new Set());
     } catch (e) {
       setErrorRemision(e instanceof Error ? e.message : "Error");
@@ -136,6 +212,12 @@ export default function FacturacionView() {
       const res = await fetch("/api/remision/numero", { method: "POST" });
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error || `Error ${res.status}`);
+      guardarAsignacionRem(
+        remision.idCliente,
+        data.numero,
+        remision.fecha,
+        remision.filas,
+      );
       setRemision((r) => (r ? { ...r, numero: data.numero as number } : r));
       setImprimirPend(true); // el efecto imprime cuando el número está en el DOM
     } catch (e) {
@@ -143,6 +225,44 @@ export default function FacturacionView() {
     } finally {
       setAsignandoNumero(false);
     }
+  }
+
+  // Para el caso raro de un SEGUNDO despacho legítimo del mismo cliente en el
+  // día: descarta el número reutilizado y consume un consecutivo nuevo.
+  async function usarNumeroNuevo() {
+    if (!remision) return;
+    setAsignandoNumero(true);
+    setErrorRemision(null);
+    try {
+      const res = await fetch("/api/remision/numero", { method: "POST" });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || `Error ${res.status}`);
+      guardarAsignacionRem(
+        remision.idCliente,
+        data.numero,
+        remision.fecha,
+        remision.filas,
+      );
+      setNumeroReutilizado(false);
+      setRemision((r) => (r ? { ...r, numero: data.numero as number } : r));
+    } catch (e) {
+      setErrorRemision(e instanceof Error ? e.message : "Error");
+    } finally {
+      setAsignandoNumero(false);
+    }
+  }
+
+  // Fuerza a mano el número ya asignado hoy a este cliente (caso: la remisión
+  // rearmada no comparte pedidos con la original pero SÍ la reemplaza).
+  function usarNumeroPrevio() {
+    if (!remision || numeroPrevioOtros <= 0) return;
+    const previa = asignacionHoy(remision.idCliente, remision.fecha);
+    guardarAsignacionRem(remision.idCliente, numeroPrevioOtros, remision.fecha, [
+      ...new Set([...(previa?.filas ?? []), ...remision.filas]),
+    ]);
+    setNumeroReutilizado(true);
+    setNumeroPrevioOtros(0);
+    setRemision((r) => (r ? { ...r, numero: numeroPrevioOtros } : r));
   }
 
   // Imprime una vez que el número asignado ya se reflejó en el documento.
@@ -449,6 +569,36 @@ export default function FacturacionView() {
               {remision.numero === 0 && !errorRemision && (
                 <p className="mb-2 text-center text-xs text-neutral-300">
                   El número de remisión (REM N°) se asigna al imprimir.
+                  {numeroPrevioOtros > 0 && (
+                    <>
+                      {" "}
+                      Hoy ya se asignó el REM N°{" "}
+                      {String(numeroPrevioOtros).padStart(4, "0")} a este
+                      cliente con otros pedidos; esta remisión consumirá un
+                      número nuevo.{" "}
+                      <button
+                        onClick={usarNumeroPrevio}
+                        className="font-semibold underline"
+                      >
+                        ¿Reemplaza la anterior? Usar ese mismo N°
+                      </button>
+                    </>
+                  )}
+                </p>
+              )}
+              {remision.numero > 0 && numeroReutilizado && !errorRemision && (
+                <p className="mb-2 text-center text-xs text-neutral-300">
+                  Se reutilizó el REM N°{" "}
+                  {String(remision.numero).padStart(4, "0")} asignado hoy a este
+                  cliente porque comparte pedidos con esa remisión (no gasta
+                  otro consecutivo).{" "}
+                  <button
+                    onClick={usarNumeroNuevo}
+                    disabled={asignandoNumero}
+                    className="font-semibold underline disabled:opacity-60"
+                  >
+                    ¿Es otro despacho? Usar N° nuevo
+                  </button>
                 </p>
               )}
               {errorRemision && (

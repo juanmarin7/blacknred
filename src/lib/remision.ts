@@ -23,6 +23,9 @@ export interface RemisionItem {
 export interface Remision {
   numero: number;
   fecha: string;
+  /** Identidad del cliente (id o, si falta, el nombre). El front la usa para
+   *  reutilizar el REM N° si hoy ya se asignó uno para este mismo cliente. */
+  idCliente: string;
   cliente: {
     nombre: string;
     direccion: string;
@@ -34,6 +37,9 @@ export interface Remision {
   granTotal: number;
   /** Códigos de pedido incluidos (para referencia/auditoría). */
   codigos: string[];
+  /** Filas de la hoja incluidas (rowNumber, únicos). El front las usa para
+   *  decidir si una remisión rearmada es "la misma" (comparten pedidos). */
+  filas: number[];
 }
 
 /** Fecha de hoy en Bogotá, estilo "02-jul-2026". */
@@ -109,6 +115,7 @@ export async function generarRemision(filasSel: number[]): Promise<Remision> {
   return {
     numero: 0, // se asigna al imprimir (ver asignarNumeroRemision)
     fecha: fechaHoyBogota(),
+    idCliente: idCliente || filas[0].cliente,
     cliente: {
       nombre: cli?.nombre || filas[0].cliente,
       direccion: cli?.direccion || "",
@@ -119,5 +126,6 @@ export async function generarRemision(filasSel: number[]): Promise<Remision> {
     items,
     granTotal,
     codigos: [...new Set(filas.map((f) => f.codigo))],
+    filas: filas.map((f) => f.rowNumber),
   };
 }
