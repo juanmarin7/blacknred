@@ -154,6 +154,21 @@ export default function FacturacionView() {
     }
   }, [imprimirPend, remision]);
 
+  // Ctrl+P / Cmd+P con el overlay abierto: pasa por el flujo del botón para
+  // asignar el REM N° antes de imprimir (si no, saldría "REM N° —").
+  useEffect(() => {
+    if (!remision) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "p") {
+        e.preventDefault();
+        if (!asignandoNumero) imprimir();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [remision, asignandoNumero]);
+
   return (
     <div className="flex min-h-screen flex-col">
       <AppHeader
@@ -443,7 +458,17 @@ export default function FacturacionView() {
               )}
             </div>
             <div className="remision-print-area">
-              <RemisionDoc rem={remision} />
+              {/* Si imprimen por el menú del navegador SIN número asignado,
+                  sale este aviso en vez de una remisión con "REM N° —". */}
+              {remision.numero === 0 && (
+                <div className="hidden p-10 text-center text-lg font-bold text-black print:block">
+                  Use el botón &quot;Imprimir / Guardar PDF&quot; de la app para
+                  asignar el número de remisión (REM N°) antes de imprimir.
+                </div>
+              )}
+              <div className={remision.numero === 0 ? "print:hidden" : ""}>
+                <RemisionDoc rem={remision} />
+              </div>
             </div>
           </div>
         </div>
