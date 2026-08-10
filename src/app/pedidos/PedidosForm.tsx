@@ -79,11 +79,11 @@ export default function PedidosForm() {
 
   const especiales = config.filter((v) => {
     const u = (v || "").trim().toUpperCase();
-    return u === "SURTIDO" || u === "BURBUJA";
+    return u === "SURTIDO" || u === "BURBUJA" || u === "DUOS" || u === "TRIOS";
   });
   const tallasORangos = config.filter((v) => {
     const u = (v || "").trim().toUpperCase();
-    return u !== "SURTIDO" && u !== "BURBUJA";
+    return u !== "SURTIDO" && u !== "BURBUJA" && u !== "DUOS" && u !== "TRIOS";
   });
 
   const empaquesNormales = useMemo(() => {
@@ -103,9 +103,15 @@ export default function PedidosForm() {
       if (sel === "SURTIDO") {
         mostrarCantidad = true;
       } else {
-        // '' (DOCENAS POR TALLA) o BURBUJA → grilla de tallas
+        // '' (DOCENAS POR TALLA), BURBUJA, DUOS o TRIOS → grilla de tallas
         mostrarTallas = tallasORangos.length > 0;
-        if (!mostrarTallas && sel !== "BURBUJA") mostrarCantidad = true;
+        if (
+          !mostrarTallas &&
+          sel !== "BURBUJA" &&
+          sel !== "DUOS" &&
+          sel !== "TRIOS"
+        )
+          mostrarCantidad = true;
       }
     } else if (esTallas) {
       mostrarTallas = tallasORangos.length > 0;
@@ -203,6 +209,16 @@ export default function PedidosForm() {
         }
         cantidadFinal = str;
         empaqueFinal = "BURBUJA";
+      } else if (tipoEmpaque === "DUOS" || tipoEmpaque === "TRIOS") {
+        const str = leerTallas();
+        if (!str) {
+          mostrarAlerta("Debe ingresar al menos una talla.", "error");
+          return;
+        }
+        cantidadFinal = str;
+        // "Duos" / "Trios" (mismo formato que el AppScript)
+        empaqueFinal =
+          tipoEmpaque.charAt(0) + tipoEmpaque.slice(1).toLowerCase();
       } else {
         mostrarAlerta("Seleccione un tipo de empaque valido.", "error");
         return;
