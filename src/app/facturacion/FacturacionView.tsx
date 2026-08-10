@@ -198,27 +198,38 @@ export default function FacturacionView() {
     }
   }
 
+  // Guarda la remisión en la hoja histórica `Remisiones` (upsert por REM N°).
+  async function guardarRegistroRemision(rem: Remision) {
+    const res = await fetch("/api/remision/registrar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(rem),
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => null);
+      throw new Error(d?.error || "No se pudo registrar la remisión");
+    }
+  }
+
   // Imprime la remisión. Asigna el número atómico la PRIMERA vez (si numero>0 ya
-  // fue asignado, reimprime el mismo sin consumir otro consecutivo).
+  // fue asignado, reimprime el mismo sin consumir otro consecutivo) y, en todos
+  // los casos, la registra en la hoja histórica antes de imprimir (idempotente).
   async function imprimir() {
     if (!remision) return;
-    if (remision.numero > 0) {
-      window.print();
-      return;
-    }
     setAsignandoNumero(true);
     setErrorRemision(null);
     try {
-      const res = await fetch("/api/remision/numero", { method: "POST" });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.error || `Error ${res.status}`);
-      guardarAsignacionRem(
-        remision.idCliente,
-        data.numero,
-        remision.fecha,
-        remision.filas,
-      );
-      setRemision((r) => (r ? { ...r, numero: data.numero as number } : r));
+      let num = remision.numero;
+      if (num <= 0) {
+        const res = await fetch("/api/remision/numero", { method: "POST" });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(data?.error || `Error ${res.status}`);
+        num = data.numero as number;
+        guardarAsignacionRem(remision.idCliente, num, remision.fecha, remision.filas);
+        setRemision((r) => (r ? { ...r, numero: num } : r));
+      }
+      // Persistir con el número ya firme (sirve para original, reimpresión y rearme).
+      await guardarRegistroRemision({ ...remision, numero: num });
       setImprimirPend(true); // el efecto imprime cuando el número está en el DOM
     } catch (e) {
       setErrorRemision(e instanceof Error ? e.message : "Error");

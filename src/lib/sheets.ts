@@ -113,6 +113,24 @@ export async function escribirCeldas(
   hojas.forEach((h) => invalidarCache(h));
 }
 
+/**
+ * Sobrescribe filas en un rango exacto (values.update). A diferencia de
+ * `agregarFilas` (append al final), esto pisa las celdas del rango dado —
+ * útil para "upsert" cuando ya se sabe el número de fila.
+ */
+export async function escribirFilas(
+  range: string,
+  filas: (string | number)[][],
+): Promise<void> {
+  await getClient().spreadsheets.values.update({
+    spreadsheetId: spreadsheetId(),
+    range,
+    valueInputOption: "USER_ENTERED",
+    requestBody: { values: filas },
+  });
+  invalidarCache(hojaDeRango(range));
+}
+
 let cola: Promise<unknown> = Promise.resolve();
 
 /** Serializa operaciones de escritura (sustituye LockService.getScriptLock). */
