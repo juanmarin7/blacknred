@@ -94,6 +94,7 @@ export default function FacturacionView() {
   const [remision, setRemision] = useState<Remision | null>(null);
   const [asignandoNumero, setAsignandoNumero] = useState(false);
   const [imprimirPend, setImprimirPend] = useState(false);
+  const [descargandoExcel, setDescargandoExcel] = useState(false);
   // true si el REM N° mostrado se reutilizó de una asignación previa de hoy.
   const [numeroReutilizado, setNumeroReutilizado] = useState(false);
   // N° asignado hoy al mismo cliente pero para OTROS pedidos (sin cruce):
@@ -235,6 +236,40 @@ export default function FacturacionView() {
       setErrorRemision(e instanceof Error ? e.message : "Error");
     } finally {
       setAsignandoNumero(false);
+    }
+  }
+
+  // Descarga la remisión en Excel (.xlsx) con el mismo contenido del documento.
+  async function descargarExcel() {
+    if (!remision) return;
+    setDescargandoExcel(true);
+    setErrorRemision(null);
+    try {
+      const res = await fetch("/api/remision/excel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(remision),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => null);
+        throw new Error(d?.error || "No se pudo generar el Excel");
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download =
+        remision.numero > 0
+          ? `Remision-${String(remision.numero).padStart(4, "0")}.xlsx`
+          : "Remision-borrador.xlsx";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setErrorRemision(e instanceof Error ? e.message : "Error");
+    } finally {
+      setDescargandoExcel(false);
     }
   }
 
@@ -572,15 +607,24 @@ export default function FacturacionView() {
                 >
                   Cerrar
                 </button>
-                <button
-                  onClick={imprimir}
-                  disabled={asignandoNumero}
-                  className="rounded-lg bg-neutral-900 px-6 py-2 text-sm font-bold text-white hover:bg-black disabled:opacity-60"
-                >
-                  {asignandoNumero
-                    ? "Asignando N°..."
-                    : "Imprimir / Guardar PDF"}
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={descargarExcel}
+                    disabled={descargandoExcel}
+                    className="rounded-lg border border-emerald-600 bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-60"
+                  >
+                    {descargandoExcel ? "Generando..." : "Descargar Excel"}
+                  </button>
+                  <button
+                    onClick={imprimir}
+                    disabled={asignandoNumero}
+                    className="rounded-lg bg-neutral-900 px-6 py-2 text-sm font-bold text-white hover:bg-black disabled:opacity-60"
+                  >
+                    {asignandoNumero
+                      ? "Asignando N°..."
+                      : "Imprimir / Guardar PDF"}
+                  </button>
+                </div>
               </div>
               {remision.numero === 0 && !errorRemision && (
                 <p className="mb-2 text-center text-xs text-neutral-300">
