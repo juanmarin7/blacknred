@@ -215,12 +215,16 @@ function filaRegistro(
 }
 
 /**
- * Registra la remisión ORIGINAL en la hoja histórica. Idempotente por REM N°:
- * si ya existe una fila `original` con ese número (reimpresión o rearme), la
- * sobrescribe en vez de duplicar. Se llama al imprimir, cuando el número ya
- * está firme. En modo mock no persiste (no hay hoja real).
+ * Upsert de una fila en la hoja histórica, idempotente por (REM N° + tipo): si
+ * ya existe una fila de ese mismo número y tipo la sobrescribe, si no la agrega.
+ * La clave incluye el `tipo` para que la `modificada` NO pise a la `original`
+ * (ambas comparten REM N°). En modo mock no persiste (no hay hoja real).
  */
-export async function registrarRemision(rem: Remision): Promise<void> {
+async function upsertRegistro(
+  rem: Remision,
+  tipo: "original" | "modificada",
+  pct: number,
+): Promise<void> {
   if (mockActivo()) return;
   if (!rem?.numero || rem.numero <= 0) {
     throw new Error("La remisión no tiene número asignado.");
@@ -231,13 +235,146 @@ export async function registrarRemision(rem: Remision): Promise<void> {
     const idx = filas.findIndex(
       (r) =>
         Number(r[0]) === rem.numero &&
-        String(r[2] || "").toLowerCase() === "original",
+        String(r[2] || "").toLowerCase() === tipo,
     );
-    const fila = filaRegistro(rem, "original", 0);
+    const fila = filaRegistro(rem, tipo, pct);
     if (idx >= 0) {
       await escribirFilas(`${HOJA_REMISIONES}!A${idx + 2}`, [fila]);
     } else {
       await agregarFilas(HOJA_REMISIONES, [fila]);
     }
   });
+}
+
+/**
+ * Registra la remisión ORIGINAL en la hoja histórica. Idempotente por REM N°:
+ * si ya existe una fila `original` con ese número (reimpresión o rearme), la
+ * sobrescribe en vez de duplicar. Se llama al imprimir, cuando el número ya
+ * está firme.
+ */
+export async function registrarRemision(rem: Remision): Promise<void> {
+  await upsertRegistro(rem, "original", 0);
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+ * M3 — Lectura de la hoja `Remisiones` y modificación por porcentaje.
+ * ──────────────────────────────────────────────────────────────────────── */
+
+/** Una fila de la hoja `Remisiones` ya reconstruida como `Remision` + metadatos. */
+export interface RegistroRemision {
+  tipo: "original" | "modificada";
+  /** % que se restó (0 en la original). */
+  pct: number;
+  /** Marca de tiempo en que se guardó la fila. */
+  creadaEn: string;
+  rem: Remision;
+}
+
+/** Una remisión con su versión original y, si existe, su versión modificada. */
+export interface RemisionAgrupada {
+  numero: number;
+  original: RegistroRemision | null;
+  modificada: RegistroRemision | null;
+}
+
+/** Reconstruye un `RegistroRemision` desde una fila A..O de la hoja. */
+function registroDesdeFila(r: (string | number)[]): RegistroRemision {
+  const numero = Number(r[0]) || 0;
+  const tipo =
+    String(r[2] ?? "").toLowerCase() === "modificada" ? "modificada" : "original";
+  return {
+    tipo,
+    pct: Number(r[3]) || 0,
+    creadaEn: String(r[14] ?? ""),
+    rem: {
+      numero,
+      fecha: String(r[1] ?? ""),
+      idCliente: String(r[4] ?? ""),
+      cliente: {
+        nombre: String(r[5] ?? ""),
+        local: String(r[6] ?? ""),
+        direccion: String(r[7] ?? ""),
+        telefono: String(r[8] ?? ""),
+        ciudad: String(r[9] ?? ""),
+      },
+      vendedor: String(r[10] ?? ""),
+      items: parsearDetalle(String(r[13] ?? "")),
+      granTotal: Number(r[12]) || 0,
+      codigos: String(r[11] ?? "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
+      filas: [], // la hoja no guarda los rowNumber; no se necesitan en /remisiones
+    },
+  };
+}
+
+/**
+ * Lee la hoja histórica y agrupa por REM N°: cada número trae su `original` y,
+ * si ya fue modificada, su `modificada`. Ordenado del número más alto al más
+ * bajo (las últimas remisiones primero). En modo mock devuelve lista vacía.
+ * Se lee en crudo (UNFORMATTED) para que el total llegue como número real.
+ */
+export async function leerRemisiones(): Promise<RemisionAgrupada[]> {
+  if (mockActivo()) return [];
+
+  const filas = await leerRango(`${HOJA_REMISIONES}!A2:O`, {
+    fresco: true,
+    crudo: true,
+  });
+
+  const porNumero = new Map<number, RemisionAgrupada>();
+  for (const fila of filas) {
+    if (fila[0] === undefined || fila[0] === "") continue;
+    const reg = registroDesdeFila(fila);
+    let g = porNumero.get(reg.rem.numero);
+    if (!g) {
+      g = { numero: reg.rem.numero, original: null, modificada: null };
+      porNumero.set(reg.rem.numero, g);
+    }
+    if (reg.tipo === "modificada") g.modificada = reg;
+    else g.original = reg;
+  }
+
+  return [...porNumero.values()].sort((a, b) => b.numero - a.numero);
+}
+
+/**
+ * Aplica una reducción porcentual a la remisión. `pct` es el % que se QUITA
+ * (10 → queda el 90%). Se reducen TANTO la cantidad COMO el valor unitario de
+ * cada ítem (redondeados), y el total de cada línea se RECALCULA = cantidad ×
+ * valorUni; por eso el total baja más que el % (doble reducción). Función pura.
+ */
+export function aplicarPorcentaje(rem: Remision, pct: number): Remision {
+  const factor = 1 - pct / 100;
+  const items = rem.items.map((it) => {
+    const cantidad = Math.round(it.cantidad * factor);
+    const valorUni = Math.round(it.valorUni * factor);
+    return { ...it, cantidad, valorUni, total: cantidad * valorUni };
+  });
+  return {
+    ...rem,
+    items,
+    granTotal: items.reduce((s, it) => s + it.total, 0),
+  };
+}
+
+/**
+ * Carga la remisión ORIGINAL de la hoja por su número, le aplica el % y guarda
+ * la versión MODIFICADA como fila aparte (upsert por número+tipo: no pisa la
+ * original; si ya había una modificada la reemplaza). Mantiene el mismo REM N°.
+ * Devuelve la remisión modificada.
+ */
+export async function modificarRemision(
+  numero: number,
+  pct: number,
+): Promise<Remision> {
+  const grupos = await leerRemisiones();
+  const grupo = grupos.find((g) => g.numero === numero);
+  if (!grupo?.original) {
+    throw new Error(`No se encontró la remisión ${numero}.`);
+  }
+  const modificada = aplicarPorcentaje(grupo.original.rem, pct);
+  await upsertRegistro(modificada, "modificada", pct);
+  return modificada;
 }
