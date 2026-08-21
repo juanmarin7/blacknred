@@ -28,26 +28,26 @@ function remisionDe(items: RemisionItem[]): Remision {
 }
 
 describe("aplicarPorcentaje", () => {
-  it("resta el % a cantidad y valor unitario y recalcula el total (doble reducción)", () => {
+  it("resta el % SOLO a la cantidad (el valor unitario no cambia) y recalcula el total", () => {
     const rem = remisionDe([
       { ref: "P1", cantidad: 100, descripcion: "Producto 1", valorUni: 5000, total: 500000 },
     ]);
     const mod = aplicarPorcentaje(rem, 10);
     expect(mod.items[0].cantidad).toBe(90);
-    expect(mod.items[0].valorUni).toBe(4500);
-    expect(mod.items[0].total).toBe(90 * 4500); // 405000
-    expect(mod.granTotal).toBe(405000);
+    expect(mod.items[0].valorUni).toBe(5000); // intacto
+    expect(mod.items[0].total).toBe(90 * 5000); // 450000
+    expect(mod.granTotal).toBe(450000);
   });
 
-  it("redondea la cantidad y el valor unitario", () => {
+  it("redondea la cantidad y deja el valor unitario intacto", () => {
     const rem = remisionDe([
       { ref: "P1", cantidad: 7, descripcion: "P", valorUni: 3333, total: 23331 },
     ]);
     const mod = aplicarPorcentaje(rem, 15);
-    // 7 * 0.85 = 5.95 -> 6 ; 3333 * 0.85 = 2833.05 -> 2833
+    // 7 * 0.85 = 5.95 -> 6 ; valorUni intacto
     expect(mod.items[0].cantidad).toBe(6);
-    expect(mod.items[0].valorUni).toBe(2833);
-    expect(mod.items[0].total).toBe(6 * 2833);
+    expect(mod.items[0].valorUni).toBe(3333);
+    expect(mod.items[0].total).toBe(6 * 3333);
   });
 
   it("no muta la remisión original", () => {

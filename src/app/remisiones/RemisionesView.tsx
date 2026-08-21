@@ -281,9 +281,9 @@ export default function RemisionesView() {
             </p>
             <p className="mt-4 text-left text-sm leading-relaxed text-white">
               Escribe el porcentaje que se le <strong>resta</strong> a la
-              remisión. Se reduce por ese % la cantidad y el valor de cada
-              producto (las cantidades se redondean). Ej.: 100 unidades con{" "}
-              <strong>10%</strong> quedan en <strong>90</strong>.
+              remisión. Se reduce por ese % la <strong>cantidad</strong> de cada
+              producto (redondeada); el valor unitario no cambia. Ej.: 100
+              unidades con <strong>10%</strong> quedan en <strong>90</strong>.
             </p>
             <div className="mt-5 flex items-center justify-center gap-2">
               <input

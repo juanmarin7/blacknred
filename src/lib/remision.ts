@@ -341,16 +341,16 @@ export async function leerRemisiones(): Promise<RemisionAgrupada[]> {
 
 /**
  * Aplica una reducción porcentual a la remisión. `pct` es el % que se QUITA
- * (10 → queda el 90%). Se reducen TANTO la cantidad COMO el valor unitario de
- * cada ítem (redondeados), y el total de cada línea se RECALCULA = cantidad ×
- * valorUni; por eso el total baja más que el % (doble reducción). Función pura.
+ * (10 → queda el 90%). Solo se reduce la CANTIDAD de cada ítem (redondeada); el
+ * valor unitario NO se toca. El total de cada línea se RECALCULA = cantidad ×
+ * valorUni. (Decisión del cliente 2026-08-21: aplicar el % también al valor
+ * unitario alteraba por completo el resultado, así que se dejó fuera.) Pura.
  */
 export function aplicarPorcentaje(rem: Remision, pct: number): Remision {
   const factor = 1 - pct / 100;
   const items = rem.items.map((it) => {
     const cantidad = Math.round(it.cantidad * factor);
-    const valorUni = Math.round(it.valorUni * factor);
-    return { ...it, cantidad, valorUni, total: cantidad * valorUni };
+    return { ...it, cantidad, total: cantidad * it.valorUni };
   });
   return {
     ...rem,
