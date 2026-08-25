@@ -2,15 +2,14 @@ import type { Perfil } from "./types";
 
 /**
  * Vistas de la app (equivalente a VISTAS + PERFILES del login original).
- * Nota: `/remisiones` (M3, modificar remisiones) NO figura aquí a propósito —
- * queda accesible por URL para quien tenga permiso (ver ACCESOS) pero OCULTO del
- * menú del panel hasta el go-live (equivale al "feature flag" acordado).
+ * Cada entrada arma el menú del panel y se filtra por perfil según `ACCESOS`.
  */
 export const VISTAS: { ruta: string; label: string }[] = [
   { ruta: "/pedidos", label: "Formulario Ventas" },
   { ruta: "/despacho", label: "Pendientes Despacho" },
   { ruta: "/tv", label: "Pendientes TV" },
   { ruta: "/facturacion", label: "Facturación" },
+  { ruta: "/remisiones", label: "Remisiones" },
   { ruta: "/estados", label: "Vista Estados" },
   { ruta: "/admin/tablero", label: "Tablero (métricas)" },
   { ruta: "/admin/usuarios", label: "Administrar usuarios" },
