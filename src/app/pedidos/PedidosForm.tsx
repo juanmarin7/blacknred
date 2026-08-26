@@ -337,8 +337,15 @@ export default function PedidosForm() {
         : Number(item.cantidad) || 0;
       const subtotal = cantidadTotal * item.precioFinal;
       granTotal += subtotal;
+      // Empaques DUOS/TRIOS muestran su propia unidad (duos/trios); el resto
+      // sigue en docenas ("doc") o unidades ("und") según el producto.
+      const emp = (item.empaque || "").trim().toLowerCase();
       const unidad =
-        item.producto.unidadDocena === "Unidad" ? "und" : "doc";
+        emp === "duos" || emp === "trios"
+          ? emp
+          : item.producto.unidadDocena === "Unidad"
+            ? "und"
+            : "doc";
       return { item, esT, cantidadTotal, subtotal, unidad };
     });
     return { filas, granTotal };
