@@ -14,7 +14,10 @@ export default function EstadosView() {
   const termino = busqueda.trim().toLowerCase();
   const filtrados = (pedidos ?? [])
     .filter(
-      (p) => !termino || p.producto.toLowerCase().includes(termino),
+      (p) =>
+        !termino ||
+        p.producto.toLowerCase().includes(termino) ||
+        p.cliente.toLowerCase().includes(termino),
     )
     .sort((a, b) =>
       String(a.codigo).localeCompare(String(b.codigo), "es", {
@@ -37,7 +40,7 @@ export default function EstadosView() {
         <input
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}
-          placeholder="Buscar por producto..."
+          placeholder="Buscar por producto o cliente..."
           className="w-full rounded-lg border border-line-strong bg-surface px-4 py-3 text-base text-white transition-colors focus:border-accent focus:outline-none"
         />
       </div>
